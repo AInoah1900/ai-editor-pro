@@ -176,9 +176,9 @@ export default function Home() {
               让学术出版更智能、更高效、更专业。
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <button className="bg-blue-600 text-white px-8 py-4 rounded-xl text-lg font-medium hover:bg-blue-700 transition-all transform hover:scale-105 shadow-lg btn-primary">
+              <Link href="/editor" className="bg-blue-600 text-white px-8 py-4 rounded-xl text-lg font-medium hover:bg-blue-700 transition-all transform hover:scale-105 shadow-lg btn-primary">
                 立即开始免费试用
-              </button>
+              </Link>
               <button className="border border-gray-300 text-gray-700 px-8 py-4 rounded-xl text-lg font-medium hover:bg-gray-50 transition-colors group">
                 <span className="flex items-center">
                   观看产品演示
@@ -414,9 +414,9 @@ export default function Home() {
             立即体验AI Editor Pro，让您的期刊出版工作更加高效专业
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button className="bg-blue-600 text-white px-8 py-4 rounded-xl text-lg font-medium hover:bg-blue-700 transition-all transform hover:scale-105 shadow-lg btn-primary">
+            <Link href="/editor" className="bg-blue-600 text-white px-8 py-4 rounded-xl text-lg font-medium hover:bg-blue-700 transition-all transform hover:scale-105 shadow-lg btn-primary">
               免费试用30天
-            </button>
+            </Link>
             <button className="border border-gray-300 text-gray-700 px-8 py-4 rounded-xl text-lg font-medium hover:bg-gray-50 transition-colors">
               联系销售团队
             </button>
