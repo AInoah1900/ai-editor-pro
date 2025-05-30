@@ -39,15 +39,19 @@ export async function POST(request: NextRequest) {
 
     // 构建DeepSeek API请求
     const prompt = `
-请作为一个专业的期刊编辑，对以下文档进行全面的校对和分析。请检查以下方面的问题：
+请作为一个专业的期刊编辑，对以下文档进行精确的校对和分析。
 
-1. 语法错误（拼写、语法、句法）
-2. 标点符号使用错误
-3. 语句逻辑问题
-4. 语病和表达不当
-5. 学术写作规范
-6. 文献引用格式
-7. 图表描述一致性
+重要要求：
+1. 只标注具体有问题的词汇或短语，不要标注整个句子
+2. 对于重复词汇（如"研究研究"、"的的"），只标注重复的部分
+3. 对于标点错误，只标注错误的标点符号
+4. 确保original字段包含的是确切需要修改的文字
+
+请检查以下方面的问题：
+1. 重复词汇（如"研究研究"→"研究"、"的的"→"的"）
+2. 重复标点符号（如"？。"→"？"）
+3. 语法错误和用词不当
+4. 学术写作规范问题
 
 对于发现的每个问题，请按照以下JSON格式返回：
 {
@@ -55,8 +59,8 @@ export async function POST(request: NextRequest) {
     {
       "id": "唯一标识符",
       "type": "error|warning|suggestion",
-      "original": "原始文本",
-      "suggestion": "修改建议",
+      "original": "确切的错误文字（如'研究研究'）",
+      "suggestion": "修改建议（如'研究'）",
       "reason": "错误原因说明",
       "category": "错误类别"
     }
@@ -64,15 +68,19 @@ export async function POST(request: NextRequest) {
 }
 
 错误类型说明：
-- error: 确定的错误，必须修改
-- warning: 疑似错误，建议修改
-- suggestion: 优化建议，可以改进
+- error: 确定的错误，必须修改（如重复词汇、明显语法错误）
+- warning: 疑似错误，建议修改（如标点使用、表达方式）
+- suggestion: 优化建议，可以改进（如长句分解、表达优化）
+
+示例：
+文本："基于超音速数值仿真下多脉冲约束弹体的修正策略研究研究综述"
+应该标注："研究研究" → "研究"，而不是整个句子
 
 请分析以下文档：
 
 ${content}
 
-请只返回JSON格式的结果，不要包含其他文字说明。
+请只返回JSON格式的结果，确保original字段精确匹配文档中的错误文字。
 `;
 
     const response = await fetch(DEEPSEEK_API_URL, {
@@ -181,6 +189,7 @@ function calculateErrorPosition(content: string, original: string, index: number
     return { start: index * 10, end: index * 10 + 5 };
   }
 
+  // 尝试精确匹配错误文本
   const position = content.indexOf(original);
   if (position !== -1) {
     return {
@@ -189,7 +198,26 @@ function calculateErrorPosition(content: string, original: string, index: number
     };
   }
 
-  // 如果找不到确切位置，返回估算位置
+  // 如果找不到确切位置，尝试查找相似的错误模式
+  const errorPatterns = [
+    /(\S+)\1+/g, // 重复词汇模式，如"研究研究"、"的的"
+    /[？。]{2,}/g, // 重复标点符号
+    /\s{2,}/g, // 多余空格
+  ];
+
+  for (const pattern of errorPatterns) {
+    const matches = Array.from(content.matchAll(pattern));
+    for (const match of matches) {
+      if (match[0] === original || match[0].includes(original)) {
+        return {
+          start: match.index!,
+          end: match.index! + match[0].length
+        };
+      }
+    }
+  }
+
+  // 如果还是找不到，返回估算位置
   const estimatedPosition = Math.min(index * 20, content.length - 10);
   return {
     start: estimatedPosition,
@@ -213,58 +241,119 @@ function generateFallbackErrors(content: string): ErrorItem[] {
     }];
   }
 
-  // 基于实际内容生成智能的模拟错误
-  const words = content.split(/\s+/);
-  let position = 0;
-
-  words.forEach((word, index) => {
-    if (errors.length >= 6) return; // 限制错误数量
-
-    const wordStart = content.indexOf(word, position);
-    const wordEnd = wordStart + word.length;
-    position = wordEnd;
-
-    // 检测常见错误模式
-    if (word.includes('的的') || word.includes('了了') || word.includes('在在')) {
+  // 1. 检测重复词汇（精确定位）
+  const duplicatePattern = /(\S+?)\1+/g;
+  let match;
+  while ((match = duplicatePattern.exec(content)) !== null && errors.length < 10) {
+    const duplicateText = match[0];
+    const singleText = match[1];
+    
+    // 跳过单字符重复（可能是正常的）
+    if (singleText.length >= 2) {
       errors.push({
-        id: `fallback_duplicate_${index}`,
+        id: `fallback_duplicate_${match.index}`,
         type: 'error',
-        position: { start: wordStart, end: wordEnd },
-        original: word,
-        suggestion: word.replace(/(.)\1/, '$1'),
-        reason: '重复词汇，需要删除多余的字',
+        position: { start: match.index, end: match.index + duplicateText.length },
+        original: duplicateText,
+        suggestion: singleText,
+        reason: `重复词汇"${singleText}"，建议删除多余部分`,
         category: '语法错误'
       });
-    } else if (word.includes('？') && word.includes('。')) {
+    }
+  }
+
+  // 2. 检测重复标点符号
+  const punctuationPattern = /([？。！，；：])\1+/g;
+  while ((match = punctuationPattern.exec(content)) !== null && errors.length < 10) {
+    const duplicatePunct = match[0];
+    const singlePunct = match[1];
+    
+    errors.push({
+      id: `fallback_punctuation_${match.index}`,
+      type: 'warning',
+      position: { start: match.index, end: match.index + duplicatePunct.length },
+      original: duplicatePunct,
+      suggestion: singlePunct,
+      reason: `重复标点符号"${singlePunct}"，建议删除多余部分`,
+      category: '标点错误'
+    });
+  }
+
+  // 3. 检测常见错误词汇
+  const commonErrors = [
+    { pattern: /的的/g, suggestion: '的', reason: '重复使用"的"字' },
+    { pattern: /了了/g, suggestion: '了', reason: '重复使用"了"字' },
+    { pattern: /在在/g, suggestion: '在', reason: '重复使用"在"字' },
+    { pattern: /是是/g, suggestion: '是', reason: '重复使用"是"字' },
+    { pattern: /和和/g, suggestion: '和', reason: '重复使用"和"字' },
+    { pattern: /或或/g, suggestion: '或', reason: '重复使用"或"字' },
+  ];
+
+  commonErrors.forEach(({ pattern, suggestion, reason }) => {
+    while ((match = pattern.exec(content)) !== null && errors.length < 10) {
       errors.push({
-        id: `fallback_punctuation_${index}`,
-        type: 'warning',
-        position: { start: wordStart, end: wordEnd },
-        original: word,
-        suggestion: word.replace('？。', '？').replace('。？', '？'),
-        reason: '标点符号使用重复',
-        category: '标点错误'
+        id: `fallback_common_${match.index}`,
+        type: 'error',
+        position: { start: match.index, end: match.index + match[0].length },
+        original: match[0],
+        suggestion: suggestion,
+        reason: reason,
+        category: '语法错误'
       });
-    } else if (word.length > 8 && Math.random() > 0.7) {
+    }
+  });
+
+  // 4. 检测可能的错误表达
+  const expressionErrors = [
+    { pattern: /错误问题/g, suggestion: '错误', reason: '"错误问题"表达重复，建议简化' },
+    { pattern: /问题错误/g, suggestion: '问题', reason: '"问题错误"表达重复，建议简化' },
+    { pattern: /毛病问题/g, suggestion: '问题', reason: '"毛病问题"表达不当，建议使用"问题"' },
+  ];
+
+  expressionErrors.forEach(({ pattern, suggestion, reason }) => {
+    while ((match = pattern.exec(content)) !== null && errors.length < 10) {
       errors.push({
-        id: `fallback_suggestion_${index}`,
-        type: 'suggestion',
-        position: { start: wordStart, end: wordEnd },
-        original: word,
-        suggestion: `${word}（建议简化表达）`,
-        reason: '表达可以更加简洁明了',
+        id: `fallback_expression_${match.index}`,
+        type: 'warning',
+        position: { start: match.index, end: match.index + match[0].length },
+        original: match[0],
+        suggestion: suggestion,
+        reason: reason,
         category: '表达优化'
       });
     }
   });
 
-  // 如果没有找到明显错误，添加一些通用建议
+  // 5. 检测长句子（建议优化）
+  const sentences = content.split(/[。！？]/);
+  let currentPos = 0;
+  
+  sentences.forEach((sentence, index) => {
+    if (sentence.length > 50 && errors.length < 10) {
+      const sentenceStart = content.indexOf(sentence, currentPos);
+      if (sentenceStart !== -1) {
+        errors.push({
+          id: `fallback_long_sentence_${index}`,
+          type: 'suggestion',
+          position: { start: sentenceStart, end: sentenceStart + sentence.length },
+          original: sentence,
+          suggestion: `${sentence.substring(0, 25)}...（建议分句）`,
+          reason: '句子过长，建议分解为多个短句以提高可读性',
+          category: '表达优化'
+        });
+      }
+    }
+    currentPos += sentence.length + 1; // +1 for the punctuation
+  });
+
+  // 如果没有找到任何错误，添加一个示例
   if (errors.length === 0) {
+    const sampleText = content.substring(0, Math.min(20, content.length));
     errors.push({
       id: 'fallback_general',
       type: 'suggestion',
-      position: { start: 0, end: Math.min(10, content.length) },
-      original: content.substring(0, 10),
+      position: { start: 0, end: sampleText.length },
+      original: sampleText,
       suggestion: '建议检查文档的整体结构和逻辑',
       reason: '文档整体质量良好，建议进行细节优化',
       category: '整体优化'
