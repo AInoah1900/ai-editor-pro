@@ -23,27 +23,17 @@ interface CorrectionRecord {
   timestamp: Date;
 }
 
-interface FloatingMenu {
-  show: boolean;
-  x: number;
-  y: number;
+interface EditingState {
   errorId: string;
+  content: string;
 }
 
 export default function DocumentEditor({ content }: DocumentEditorProps) {
   const [documentContent, setDocumentContent] = useState(content);
   const [errors, setErrors] = useState<ErrorItem[]>([]);
   const [correctionRecords, setCorrectionRecords] = useState<CorrectionRecord[]>([]);
-  const [selectedError, setSelectedError] = useState<ErrorItem | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [floatingMenu, setFloatingMenu] = useState<FloatingMenu>({
-    show: false,
-    x: 0,
-    y: 0,
-    errorId: ''
-  });
-  const [editingErrorId, setEditingErrorId] = useState<string | null>(null);
-  const [editingSuggestion, setEditingSuggestion] = useState('');
+  const [editingState, setEditingState] = useState<EditingState | null>(null);
   const [selectedErrorTypes, setSelectedErrorTypes] = useState({
     error: true,
     warning: true,
@@ -52,7 +42,6 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
   const [selectedCategory, setSelectedCategory] = useState('all');
 
   const editorRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   // 调用DeepSeek API进行文档分析
   const analyzeDocument = React.useCallback(async () => {
@@ -71,7 +60,6 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
         console.log('API返回结果:', result);
         
         if (result.errors && Array.isArray(result.errors)) {
-          // 确保每个错误都有正确的位置信息
           const validatedErrors = result.errors.map((error: any, index: number) => ({
             id: error.id || `api_error_${Date.now()}_${index}`,
             type: error.type || 'warning',
@@ -99,7 +87,7 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
     }
   }, [documentContent]);
 
-  // 生成模拟错误数据（用于演示）
+  // 生成模拟错误数据
   const generateMockErrors = (): ErrorItem[] => {
     const mockErrors: ErrorItem[] = [];
     
@@ -107,61 +95,134 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
       return [];
     }
 
-    const words = documentContent.split(/\s+/);
-    let position = 0;
+    // 1. 检测重复词汇（精确定位）
+    const duplicatePattern = /(\S{2,}?)\1+/g;
+    let match;
+    while ((match = duplicatePattern.exec(documentContent)) !== null && mockErrors.length < 10) {
+      const duplicateText = match[0];
+      const singleText = match[1];
+      
+      mockErrors.push({
+        id: `mock_duplicate_${match.index}`,
+        type: 'error',
+        position: { start: match.index, end: match.index + duplicateText.length },
+        original: duplicateText,
+        suggestion: singleText,
+        reason: `重复词汇"${singleText}"，建议删除多余部分`,
+        category: '语法错误'
+      });
+    }
 
-    words.forEach((word, index) => {
-      if (mockErrors.length >= 8) return; // 限制错误数量
+    // 2. 检测重复标点符号
+    const punctuationPattern = /([？。！，；：])\1+/g;
+    while ((match = punctuationPattern.exec(documentContent)) !== null && mockErrors.length < 10) {
+      const duplicatePunct = match[0];
+      const singlePunct = match[1];
+      
+      mockErrors.push({
+        id: `mock_punctuation_${match.index}`,
+        type: 'warning',
+        position: { start: match.index, end: match.index + duplicatePunct.length },
+        original: duplicatePunct,
+        suggestion: singlePunct,
+        reason: `重复标点符号"${singlePunct}"，建议删除多余部分`,
+        category: '标点错误'
+      });
+    }
 
-      const wordStart = documentContent.indexOf(word, position);
-      const wordEnd = wordStart + word.length;
-      position = wordEnd;
+    // 3. 检测常见错误词汇
+    const commonErrors = [
+      { pattern: /的的/g, suggestion: '的', reason: '重复使用"的"字' },
+      { pattern: /了了/g, suggestion: '了', reason: '重复使用"了"字' },
+      { pattern: /在在/g, suggestion: '在', reason: '重复使用"在"字' },
+      { pattern: /是是/g, suggestion: '是', reason: '重复使用"是"字' },
+      { pattern: /和和/g, suggestion: '和', reason: '重复使用"和"字' },
+      { pattern: /或或/g, suggestion: '或', reason: '重复使用"或"字' },
+    ];
 
-      // 检测实际的错误模式
-      if (word.includes('的的') || word.includes('了了') || word.includes('在在') || word.includes('是是')) {
+    commonErrors.forEach(({ pattern, suggestion, reason }) => {
+      while ((match = pattern.exec(documentContent)) !== null && mockErrors.length < 10) {
         mockErrors.push({
-          id: `mock_duplicate_${index}`,
+          id: `mock_common_${match.index}`,
           type: 'error',
-          position: { start: wordStart, end: wordEnd },
-          original: word,
-          suggestion: word.replace(/(.)\1/, '$1'),
-          reason: '重复词汇，需要删除多余的字',
+          position: { start: match.index, end: match.index + match[0].length },
+          original: match[0],
+          suggestion: suggestion,
+          reason: reason,
           category: '语法错误'
-        });
-      } else if (word.includes('？') && word.includes('。')) {
-        mockErrors.push({
-          id: `mock_punctuation_${index}`,
-          type: 'warning',
-          position: { start: wordStart, end: wordEnd },
-          original: word,
-          suggestion: word.replace('？。', '？').replace('。？', '？'),
-          reason: '标点符号使用重复',
-          category: '标点错误'
-        });
-      } else if (word.includes('错误') || word.includes('问题') || word.includes('毛病')) {
-        mockErrors.push({
-          id: `mock_negative_${index}`,
-          type: 'warning',
-          position: { start: wordStart, end: wordEnd },
-          original: word,
-          suggestion: word.replace('错误', '内容').replace('问题', '情况').replace('毛病', '特点'),
-          reason: '建议使用更中性的表达',
-          category: '表达优化'
-        });
-      } else if (word.length > 6 && Math.random() > 0.8) {
-        mockErrors.push({
-          id: `mock_suggestion_${index}`,
-          type: 'suggestion',
-          position: { start: wordStart, end: wordEnd },
-          original: word,
-          suggestion: `${word}（可简化）`,
-          reason: '表达可以更加简洁明了',
-          category: '表达优化'
         });
       }
     });
 
-    // 如果没有找到错误，添加一些通用的演示错误
+    // 4. 检测可能的错误表达
+    const expressionErrors = [
+      { pattern: /错误问题/g, suggestion: '错误', reason: '"错误问题"表达重复，建议简化' },
+      { pattern: /问题错误/g, suggestion: '问题', reason: '"问题错误"表达重复，建议简化' },
+      { pattern: /毛病问题/g, suggestion: '问题', reason: '"毛病问题"表达不当，建议使用"问题"' },
+      { pattern: /研究研究/g, suggestion: '研究', reason: '重复使用"研究"，建议删除多余部分' },
+      { pattern: /分析分析/g, suggestion: '分析', reason: '重复使用"分析"，建议删除多余部分' },
+      { pattern: /方法方法/g, suggestion: '方法', reason: '重复使用"方法"，建议删除多余部分' },
+    ];
+
+    expressionErrors.forEach(({ pattern, suggestion, reason }) => {
+      while ((match = pattern.exec(documentContent)) !== null && mockErrors.length < 10) {
+        mockErrors.push({
+          id: `mock_expression_${match.index}`,
+          type: 'error',
+          position: { start: match.index, end: match.index + match[0].length },
+          original: match[0],
+          suggestion: suggestion,
+          reason: reason,
+          category: '语法错误'
+        });
+      }
+    });
+
+    // 5. 检测标点符号错误
+    const punctErrors = [
+      { pattern: /？。/g, suggestion: '？', reason: '问号后不需要句号' },
+      { pattern: /。？/g, suggestion: '？', reason: '句号后不需要问号' },
+      { pattern: /！。/g, suggestion: '！', reason: '感叹号后不需要句号' },
+      { pattern: /。！/g, suggestion: '！', reason: '句号后不需要感叹号' },
+    ];
+
+    punctErrors.forEach(({ pattern, suggestion, reason }) => {
+      while ((match = pattern.exec(documentContent)) !== null && mockErrors.length < 10) {
+        mockErrors.push({
+          id: `mock_punct_error_${match.index}`,
+          type: 'warning',
+          position: { start: match.index, end: match.index + match[0].length },
+          original: match[0],
+          suggestion: suggestion,
+          reason: reason,
+          category: '标点错误'
+        });
+      }
+    });
+
+    // 6. 检测过长句子（建议优化）
+    const sentences = documentContent.split(/[。！？]/);
+    let currentPos = 0;
+    
+    sentences.forEach((sentence, index) => {
+      if (sentence.length > 60 && mockErrors.length < 10) {
+        const sentenceStart = documentContent.indexOf(sentence, currentPos);
+        if (sentenceStart !== -1) {
+          mockErrors.push({
+            id: `mock_long_sentence_${index}`,
+            type: 'suggestion',
+            position: { start: sentenceStart, end: sentenceStart + sentence.length },
+            original: sentence,
+            suggestion: `${sentence.substring(0, 30)}...（建议分句）`,
+            reason: '句子过长，建议分解为多个短句以提高可读性',
+            category: '表达优化'
+          });
+        }
+      }
+      currentPos += sentence.length + 1; // +1 for the punctuation
+    });
+
+    // 如果没有找到任何错误，添加一个示例
     if (mockErrors.length === 0) {
       const sampleText = documentContent.substring(0, Math.min(20, documentContent.length));
       mockErrors.push({
@@ -182,89 +243,28 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
   const getErrorStyle = (type: string) => {
     switch (type) {
       case 'error':
-        return 'bg-red-50 border-b-2 border-red-400 text-red-900 hover:bg-red-100 transition-colors duration-200';
+        return 'bg-red-100 border-b-2 border-red-400 text-red-900';
       case 'warning':
-        return 'bg-yellow-50 border-b-2 border-yellow-400 text-yellow-900 hover:bg-yellow-100 transition-colors duration-200';
+        return 'bg-yellow-100 border-b-2 border-yellow-400 text-yellow-900';
       case 'suggestion':
-        return 'bg-green-50 border-b-2 border-green-400 text-green-900 hover:bg-green-100 transition-colors duration-200';
+        return 'bg-green-100 border-b-2 border-green-400 text-green-900';
       default:
         return '';
     }
   };
 
-  // 获取已纠正内容的样式
-  const getCorrectedStyle = () => {
-    return 'bg-blue-50 border-b-2 border-blue-400 text-blue-900 hover:bg-blue-100 transition-colors duration-200';
-  };
-
-  // 处理错误点击，显示浮动菜单
-  const handleErrorClick = (event: React.MouseEvent, errorId: string) => {
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const error = errors.find(e => e.id === errorId);
-    
-    if (error) {
-      setSelectedError(error);
-      
-      // 计算菜单的最佳位置和大小
-      const viewportHeight = window.innerHeight;
-      const viewportWidth = window.innerWidth;
-      const scrollY = window.scrollY;
-      const scrollX = window.scrollX;
-      
-      // 根据屏幕大小动态调整菜单尺寸
-      let menuWidth = 380; // 菜单宽度
-      let menuHeight = 320; // 预估菜单高度（更紧凑的布局）
-      
-      // 在小屏幕上调整菜单大小
-      if (viewportWidth < 768) {
-        menuWidth = Math.min(360, viewportWidth - 40);
-        menuHeight = 300; // 移动端稍微小一点
-      } else if (viewportWidth < 1024) {
-        menuWidth = 360;
-        menuHeight = 310;
-      }
-      
-      // 计算初始位置（优先显示在上方）
-      let x = rect.left + scrollX;
-      let y = rect.top + scrollY - menuHeight - 10;
-      
-      // 垂直位置调整 - 确保菜单完全可见
-      if (rect.top < menuHeight + 20) {
-        // 上方空间不够，显示在下方
-        y = rect.bottom + scrollY + 10;
-        
-        // 如果下方也不够，调整到能完全显示的位置
-        if (rect.bottom + menuHeight + 20 > viewportHeight + scrollY) {
-          // 计算最佳垂直位置，确保菜单完全在视窗内
-          y = Math.max(scrollY + 20, scrollY + viewportHeight - menuHeight - 20);
-        }
-      }
-      
-      // 水平位置调整 - 确保菜单完全可见
-      if (rect.left + menuWidth > viewportWidth) {
-        // 右侧空间不够，调整到左侧
-        x = Math.max(scrollX + 20, rect.right + scrollX - menuWidth);
-      }
-      
-      // 最终边界检查，确保菜单不会超出屏幕
-      x = Math.max(scrollX + 20, Math.min(x, scrollX + viewportWidth - menuWidth - 20));
-      y = Math.max(scrollY + 20, Math.min(y, scrollY + viewportHeight - menuHeight - 20));
-      
-      setFloatingMenu({
-        show: true,
-        x: x,
-        y: y,
-        errorId: errorId
-      });
+  // 获取建议提示的样式
+  const getSuggestionStyle = (type: string) => {
+    switch (type) {
+      case 'error':
+        return 'bg-red-50 border border-red-200 text-red-800';
+      case 'warning':
+        return 'bg-yellow-50 border border-yellow-200 text-yellow-800';
+      case 'suggestion':
+        return 'bg-green-50 border border-green-200 text-green-800';
+      default:
+        return '';
     }
-  };
-
-  // 关闭浮动菜单
-  const closeFloatingMenu = () => {
-    setFloatingMenu({ show: false, x: 0, y: 0, errorId: '' });
-    setEditingErrorId(null);
-    setEditingSuggestion('');
   };
 
   // 应用修改
@@ -285,27 +285,45 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
 
       // 移除已处理的错误
       setErrors(errors.filter(e => e.id !== errorId));
-      closeFloatingMenu();
     }
   };
 
   // 忽略错误
   const ignoreError = (errorId: string) => {
     setErrors(errors.filter(e => e.id !== errorId));
-    closeFloatingMenu();
   };
 
-  // 开始编辑建议
-  const startEditingSuggestion = (errorId: string, currentSuggestion: string) => {
-    setEditingErrorId(errorId);
-    setEditingSuggestion(currentSuggestion);
+  // 开始编辑
+  const startEditing = (errorId: string, currentContent: string) => {
+    setEditingState({ errorId, content: currentContent });
   };
 
-  // 保存编辑的建议
-  const saveEditedSuggestion = () => {
-    if (editingErrorId && editingSuggestion.trim()) {
-      applyCorrection(editingErrorId, editingSuggestion.trim());
+  // 保存编辑
+  const saveEdit = () => {
+    if (editingState) {
+      const error = errors.find(e => e.id === editingState.errorId);
+      if (error) {
+        const newContent = documentContent.replace(error.original, editingState.content);
+        setDocumentContent(newContent);
+        
+        // 添加纠错记录
+        setCorrectionRecords(prev => [...prev, {
+          id: `correction_${Date.now()}`,
+          original: error.original,
+          corrected: editingState.content,
+          timestamp: new Date()
+        }]);
+
+        // 移除已处理的错误
+        setErrors(errors.filter(e => e.id !== editingState.errorId));
+      }
+      setEditingState(null);
     }
+  };
+
+  // 取消编辑
+  const cancelEdit = () => {
+    setEditingState(null);
   };
 
   // 一键纠错
@@ -324,17 +342,15 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
       }]);
     });
 
-    // 移除已处理的错误
     setErrors(errors.filter(error => !selectedErrorTypes[error.type]));
   };
 
-  // 渲染带有错误标注的文档内容
-  const renderDocumentWithAnnotations = () => {
+  // 渲染带有内联纠错的文档内容
+  const renderDocumentWithInlineCorrections = () => {
     if (errors.length === 0) {
-      return <div className="whitespace-pre-wrap">{documentContent}</div>;
+      return <div className="whitespace-pre-wrap leading-relaxed">{documentContent}</div>;
     }
 
-    // 按位置排序错误
     const sortedErrors = [...errors].sort((a, b) => a.position.start - b.position.start);
     const parts = [];
     let lastIndex = 0;
@@ -349,26 +365,119 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
         );
       }
 
-      // 添加错误标注
+      // 添加错误标注和内联建议
       parts.push(
-        <span
-          key={error.id}
-          className={`cursor-pointer relative ${getErrorStyle(error.type)} px-1.5 py-0.5 rounded-md mx-0.5 inline-block`}
-          onClick={(e) => handleErrorClick(e, error.id)}
-          title={`${error.category}: ${error.reason}`}
-          style={{
-            textDecoration: 'none',
-            position: 'relative'
-          }}
-        >
-          {error.original}
-          {/* 错误类型指示器 */}
-          <span 
-            className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${
-              error.type === 'error' ? 'bg-red-500' : 
-              error.type === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
-            } opacity-75`}
-          ></span>
+        <span key={error.id} className="relative inline-block">
+          {/* 错误文本标注 */}
+          {editingState?.errorId === error.id ? (
+            // 编辑模式
+            <span className="inline-flex items-center bg-blue-50 border-2 border-blue-300 rounded-lg px-2 py-1">
+              <input
+                type="text"
+                value={editingState.content}
+                onChange={(e) => setEditingState({ ...editingState, content: e.target.value })}
+                className="bg-transparent border-none outline-none text-sm font-medium text-blue-900 min-w-0 flex-1"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveEdit();
+                  if (e.key === 'Escape') cancelEdit();
+                }}
+                style={{ width: `${Math.max(editingState.content.length * 8, 60)}px` }}
+              />
+              <div className="flex items-center space-x-1 ml-2">
+                <button
+                  onClick={saveEdit}
+                  className="px-2 py-1 bg-green-500 text-white text-xs rounded-md hover:bg-green-600 transition-colors flex items-center space-x-1"
+                  title="保存修改 (Enter)"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>保存</span>
+                </button>
+                <button
+                  onClick={cancelEdit}
+                  className="px-2 py-1 bg-gray-400 text-white text-xs rounded-md hover:bg-gray-500 transition-colors flex items-center space-x-1"
+                  title="取消编辑 (Escape)"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span>取消</span>
+                </button>
+              </div>
+            </span>
+          ) : (
+            // 标注模式
+            <span
+              className={`${getErrorStyle(error.type)} px-2 py-1 rounded-md cursor-pointer relative group transition-all duration-200 hover:shadow-md hover:scale-105 border-l-4 ${
+                error.type === 'error' ? 'border-l-red-500' : 
+                error.type === 'warning' ? 'border-l-yellow-500' : 'border-l-green-500'
+              }`}
+              onClick={() => startEditing(error.id, error.original)}
+              title={`${error.category}: ${error.reason} (点击编辑)`}
+            >
+              <span className="relative">
+                {error.original}
+                {/* 错误类型指示器 */}
+                <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${
+                  error.type === 'error' ? 'bg-red-500' : 
+                  error.type === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
+                } opacity-75 animate-pulse`}></span>
+              </span>
+              
+              {/* 内联建议提示 */}
+              <span className={`absolute top-full left-0 mt-2 px-3 py-2 ${getSuggestionStyle(error.type)} rounded-lg shadow-xl text-xs z-20 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0 min-w-max max-w-sm`}>
+                <div className="flex flex-col space-y-2">
+                  {/* 建议内容 */}
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    <span className="font-medium">建议: {error.suggestion}</span>
+                  </div>
+                  
+                  {/* 错误原因 */}
+                  <div className="text-xs opacity-75 border-t pt-1">
+                    {error.reason}
+                  </div>
+                  
+                  {/* 操作按钮 */}
+                  <div className="flex items-center space-x-2 pt-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        applyCorrection(error.id);
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-xs font-medium flex items-center justify-center space-x-1"
+                      title="应用建议"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>应用</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        ignoreError(error.id);
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-gray-400 text-white rounded-md hover:bg-gray-500 transition-colors text-xs font-medium flex items-center justify-center space-x-1"
+                      title="忽略建议"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <span>忽略</span>
+                    </button>
+                  </div>
+                </div>
+                
+                {/* 箭头指示器 */}
+                <div className="absolute -top-2 left-3 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-current"></div>
+              </span>
+            </span>
+          )}
         </span>
       );
 
@@ -420,23 +529,6 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
     }
   }, [content, analyzeDocument]);
 
-  // 点击外部关闭浮动菜单
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        closeFloatingMenu();
-      }
-    };
-
-    if (floatingMenu.show) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [floatingMenu.show]);
-
   const stats = getErrorStats();
   const categories = getCategories();
   const filteredErrors = getFilteredErrors();
@@ -483,6 +575,33 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
           </div>
         </div>
 
+        {/* 使用说明 */}
+        <div className="bg-blue-50 border-b border-blue-200 p-3">
+          <div className="flex items-center space-x-2 text-sm text-blue-800">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>
+              <strong>使用说明:</strong> 
+              悬停彩色标注查看AI建议 → 点击"应用"一键替换 → 点击"忽略"跳过建议 → 直接点击标注文字进行自定义编辑
+            </span>
+          </div>
+          <div className="mt-2 flex items-center space-x-4 text-xs text-blue-700">
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-red-100 border-l-2 border-red-500 rounded"></div>
+              <span>确定错误</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-yellow-100 border-l-2 border-yellow-500 rounded"></div>
+              <span>疑似错误</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-green-100 border-l-2 border-green-500 rounded"></div>
+              <span>优化建议</span>
+            </div>
+          </div>
+        </div>
+
         {/* 文档内容区 */}
         <div className="flex-1 bg-white overflow-hidden flex flex-col">
           <div className="flex-1 overflow-y-auto">
@@ -493,167 +612,16 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
                   className="h-full min-h-[600px] p-6 border border-gray-300 rounded-lg bg-white text-gray-900 text-base leading-relaxed overflow-y-auto"
                   style={{ 
                     fontFamily: 'Georgia, serif',
-                    maxHeight: 'calc(100vh - 200px)' // 确保不超出视窗高度
+                    maxHeight: 'calc(100vh - 250px)'
                   }}
                 >
-                  {renderDocumentWithAnnotations()}
+                  {renderDocumentWithInlineCorrections()}
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* 浮动纠错菜单 */}
-      {floatingMenu.show && selectedError && (
-        <div
-          ref={menuRef}
-          className="fixed z-50 bg-white border border-gray-200 rounded-xl shadow-2xl"
-          style={{
-            left: floatingMenu.x,
-            top: floatingMenu.y,
-            width: typeof window !== 'undefined' ? (
-              window.innerWidth < 768 ? Math.min(360, window.innerWidth - 40) : 
-              window.innerWidth < 1024 ? 360 : 380
-            ) : 380,
-            maxWidth: '90vw',
-            maxHeight: '90vh' // 确保菜单不会超出视窗高度
-          }}
-        >
-          <div className="flex flex-col bg-white rounded-xl overflow-hidden max-h-full">
-            {/* 菜单标题 */}
-            <div className="flex items-center justify-between border-b border-gray-200 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 flex-shrink-0 rounded-t-xl">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                <h4 className="font-bold text-gray-900 text-sm">智能纠错建议</h4>
-              </div>
-              <button
-                onClick={closeFloatingMenu}
-                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-1.5 transition-colors"
-                title="关闭菜单"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* 菜单内容区域 - 可滚动 */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-4 space-y-4">
-                {/* 错误内容 */}
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <div className={`w-2 h-2 rounded-full ${
-                      selectedError.type === 'error' ? 'bg-red-500' : 
-                      selectedError.type === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
-                    }`}></div>
-                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      {selectedError.category}
-                    </div>
-                  </div>
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 shadow-sm">
-                    <div className="text-xs text-red-600 font-semibold mb-1">原文内容</div>
-                    <div className="text-sm text-red-800 font-mono break-words leading-relaxed">
-                      "{selectedError.original}"
-                    </div>
-                  </div>
-                </div>
-
-                {/* 建议修改 */}
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold text-gray-700">建议修改</div>
-                  {editingErrorId === selectedError.id ? (
-                    <div className="space-y-3">
-                      <textarea
-                        value={editingSuggestion}
-                        onChange={(e) => setEditingSuggestion(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
-                        rows={2}
-                        autoFocus
-                        placeholder="输入您的修改建议..."
-                      />
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={saveEditedSuggestion}
-                          className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-sm"
-                        >
-                          保存修改
-                        </button>
-                        <button
-                          onClick={() => setEditingErrorId(null)}
-                          className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors font-semibold shadow-sm"
-                        >
-                          取消
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div 
-                      className="bg-green-50 border border-green-200 rounded-lg p-3 cursor-pointer hover:bg-green-100 transition-colors group shadow-sm"
-                      onClick={() => startEditingSuggestion(selectedError.id, selectedError.suggestion)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="text-sm text-green-800 font-mono break-words flex-1 leading-relaxed">
-                          "{selectedError.suggestion}"
-                        </div>
-                        <svg className="w-4 h-4 text-green-600 ml-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </div>
-                      <div className="text-xs text-green-600 mt-1 opacity-75 font-medium">
-                        点击编辑建议
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 错误原因 */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 shadow-sm">
-                  <div className="text-xs font-semibold text-gray-700 mb-1">错误原因</div>
-                  <div className="text-xs text-gray-600 leading-relaxed">
-                    {selectedError.reason}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 操作按钮区域 - 固定在底部，确保始终可见 */}
-            <div className="flex space-x-3 p-4 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 flex-shrink-0 rounded-b-xl">
-              <button
-                onClick={() => applyCorrection(selectedError.id)}
-                className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-3 rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 text-sm font-semibold shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 transform hover:scale-105"
-                title="应用AI建议的修改"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>应用修改</span>
-              </button>
-              <button
-                onClick={() => ignoreError(selectedError.id)}
-                className="flex-1 bg-gradient-to-r from-gray-400 to-gray-500 text-white px-4 py-3 rounded-lg hover:from-gray-500 hover:to-gray-600 transition-all duration-200 text-sm font-semibold shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 transform hover:scale-105"
-                title="忽略此错误"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                <span>忽略</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 菜单箭头指示器 */}
-          <div 
-            className="absolute w-3 h-3 bg-white border-l border-t border-gray-200 transform rotate-45 shadow-sm"
-            style={{
-              left: '20px',
-              top: floatingMenu.y < (typeof window !== 'undefined' ? window.scrollY + 150 : 150) ? '-6px' : 'auto',
-              bottom: floatingMenu.y < (typeof window !== 'undefined' ? window.scrollY + 150 : 150) ? 'auto' : '-6px',
-            }}
-          ></div>
-        </div>
-      )}
 
       {/* 右侧边栏 */}
       <div className="w-80 bg-gray-50 border-l border-gray-200 flex flex-col h-full">
@@ -768,12 +736,7 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
               {filteredErrors.map((error) => (
                 <div
                   key={error.id}
-                  className={`p-2 rounded border cursor-pointer transition-all ${
-                    selectedError?.id === error.id
-                      ? 'ring-2 ring-blue-500'
-                      : 'hover:shadow-md'
-                  } ${getErrorStyle(error.type)}`}
-                  onClick={() => setSelectedError(error)}
+                  className={`p-2 rounded border cursor-pointer transition-all hover:shadow-md ${getErrorStyle(error.type)}`}
                 >
                   <div className="text-xs font-medium uppercase tracking-wide mb-1">
                     {error.category}
