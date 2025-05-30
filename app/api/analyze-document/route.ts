@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const DEEPSEEK_API_KEY = '***REMOVED***f6790a1fcfc14f2bb5c5cc795d2f6092';
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+// 从环境变量中获取API配置
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions';
+
+// 验证必要的环境变量
+if (!DEEPSEEK_API_KEY) {
+  console.error('错误: DEEPSEEK_API_KEY 环境变量未设置');
+}
 
 interface ErrorItem {
   id: string;
@@ -15,6 +21,16 @@ interface ErrorItem {
 
 export async function POST(request: NextRequest) {
   try {
+    // 验证API密钥是否可用
+    if (!DEEPSEEK_API_KEY) {
+      console.error('DeepSeek API密钥未配置，使用备选数据');
+      const { content } = await request.json();
+      return NextResponse.json({
+        errors: generateFallbackErrors(content || ''),
+        message: 'API密钥未配置，使用本地分析'
+      });
+    }
+
     const { content } = await request.json();
 
     if (!content) {
@@ -143,9 +159,18 @@ ${content}
   } catch (error) {
     console.error('API调用失败:', error);
     
+    // 获取请求内容用于备选数据生成
+    let fallbackContent = '';
+    try {
+      const requestBody = await request.clone().json();
+      fallbackContent = requestBody.content || '';
+    } catch {
+      fallbackContent = '';
+    }
+    
     // 返回模拟数据作为备选
     return NextResponse.json({
-      errors: generateFallbackErrors(content)
+      errors: generateFallbackErrors(fallbackContent)
     });
   }
 }
