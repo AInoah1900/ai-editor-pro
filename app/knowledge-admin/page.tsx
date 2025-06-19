@@ -3,9 +3,15 @@
 import React, { useState, useEffect } from 'react';
 
 interface KnowledgeStats {
-  total: number;
-  byDomain: Record<string, number>;
-  byType: Record<string, number>;
+  total_knowledge_items: number;
+  total_files: number;
+  domains: Record<string, number>;
+  types: Record<string, number>;
+  last_updated: string;
+  vector_stats: {
+    vectors_count: number;
+    points_count: number;
+  };
 }
 
 interface KnowledgeItem {
@@ -170,7 +176,15 @@ export default function KnowledgeAdminPage() {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600">总知识项:</span>
-                  <span className="font-semibold text-blue-600">{stats.total}</span>
+                  <span className="font-semibold text-blue-600">{stats.total_knowledge_items}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">总文件数:</span>
+                  <span className="font-semibold text-blue-600">{stats.total_files}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">向量点数:</span>
+                  <span className="font-semibold text-blue-600">{stats.vector_stats.points_count}</span>
                 </div>
                 <button
                   onClick={fetchStats}
@@ -188,9 +202,9 @@ export default function KnowledgeAdminPage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               🔬 按领域分布
             </h3>
-            {stats && stats.byDomain ? (
+            {stats && stats.domains ? (
               <div className="space-y-2">
-                {Object.entries(stats.byDomain).map(([domain, count]) => (
+                {Object.entries(stats.domains).map(([domain, count]) => (
                   <div key={domain} className="flex justify-between text-sm">
                     <span className="text-gray-600 capitalize">{domain}:</span>
                     <span className="font-medium text-green-600">{count}</span>
@@ -206,9 +220,9 @@ export default function KnowledgeAdminPage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               📚 按类型分布
             </h3>
-            {stats && stats.byType ? (
+            {stats && stats.types ? (
               <div className="space-y-2">
-                {Object.entries(stats.byType).map(([type, count]) => (
+                {Object.entries(stats.types).map(([type, count]) => (
                   <div key={type} className="flex justify-between text-sm">
                     <span className="text-gray-600 capitalize">{type}:</span>
                     <span className="font-medium text-purple-600">{count}</span>
@@ -229,11 +243,11 @@ export default function KnowledgeAdminPage() {
               🚀 知识库初始化
             </h3>
             <p className="text-gray-600 mb-4">
-              初始化基础知识库，包含物理、化学、生物等6个专业领域的基础知识项。
+              初始化知识库基础设施，包括 Qdrant 向量数据库集合和 PostgreSQL 数据表结构。
             </p>
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
               <p className="text-yellow-800 text-sm">
-                ⚠️ 注意：此操作将向Pinecone数据库添加预定义的知识项。确保您的API密钥配置正确。
+                ⚠️ 注意：此操作将创建必要的数据库表结构和向量集合。确保 Qdrant 和 PostgreSQL 服务正在运行。
               </p>
             </div>
             <button
@@ -397,28 +411,44 @@ export default function KnowledgeAdminPage() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="text-gray-600">Pinecone Index:</span>
-              <span className="ml-2 font-mono text-blue-600">chatbot</span>
+              <span className="text-gray-600">向量数据库:</span>
+              <span className="ml-2 font-mono text-blue-600">Qdrant (本地)</span>
+            </div>
+            <div>
+              <span className="text-gray-600">关系数据库:</span>
+              <span className="ml-2 font-mono text-green-600">PostgreSQL (本地)</span>
             </div>
             <div>
               <span className="text-gray-600">向量维度:</span>
-              <span className="ml-2 font-mono text-green-600">1024</span>
-            </div>
-            <div>
-              <span className="text-gray-600">嵌入模型:</span>
-              <span className="ml-2 font-mono text-purple-600">text-embedding-ada-002 (智能降维)</span>
+              <span className="ml-2 font-mono text-purple-600">1024</span>
             </div>
             <div>
               <span className="text-gray-600">相似度算法:</span>
-              <span className="ml-2 font-mono text-orange-600">cosine</span>
+              <span className="ml-2 font-mono text-orange-600">Cosine</span>
+            </div>
+            <div>
+              <span className="text-gray-600">嵌入模型:</span>
+              <span className="ml-2 font-mono text-indigo-600">OpenAI + 本地模拟</span>
+            </div>
+            <div>
+              <span className="text-gray-600">AI 模型:</span>
+              <span className="ml-2 font-mono text-teal-600">DeepSeek Chat</span>
             </div>
           </div>
           
           <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
             <p className="text-green-800 text-sm">
-              💡 <strong>系统状态:</strong> 已集成智能向量生成和OpenAI API超时修复，确保100%可用性。
+              💡 <strong>系统状态:</strong> 已升级到 Qdrant + PostgreSQL 双数据库架构，数据完全本地化，确保高性能和安全性。
             </p>
           </div>
+          
+          {stats && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-blue-800 text-sm">
+                📊 <strong>实时统计:</strong> 最后更新: {new Date(stats.last_updated).toLocaleString('zh-CN')}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

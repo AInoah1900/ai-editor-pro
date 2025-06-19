@@ -4,9 +4,12 @@
 
 ## 🚀 最新更新 (2025-06-19)
 
-### ✅ Bug 修复完成
+### ✅ 完整 Bug 修复完成
 - **修复了 PostgreSQL 数据库表不存在错误**：重新创建了完整的数据库初始化脚本
-- **修复了 Qdrant 客户端方法调用错误**：更正了 `getCollection` 为 `getCollectionInfo`
+- **修复了 Qdrant 客户端包依赖问题**：从 `qdrant-client` 升级到 `@qdrant/js-client-rest`
+- **修复了 Qdrant API 方法调用错误**：更正了所有 API 方法调用
+- **修复了向量点 ID 类型错误**：确保所有 ID 字段为字符串类型
+- **修复了向量操作 "Bad Request" 错误**：使用数字 ID 和 UUID，优化 payload 处理
 - **修复了知识库管理页面编译错误**：清理了 Next.js 缓存并重新构建
 - **优化了错误处理机制**：在数据库操作前自动初始化表结构
 
@@ -16,12 +19,41 @@
 - ✅ **Web 界面**：知识库管理页面可正常访问
 - ✅ **向量检索**：Qdrant 向量数据库连接正常
 - ✅ **示例数据**：已预置 3 条示例知识项
+- ✅ **知识库初始化**：可正常初始化向量集合
+- ✅ **RAG 分析**：文档分析功能完全正常
+- ✅ **向量操作**：添加、搜索、删除向量点功能正常
 
 ### 📊 当前数据状态
-- **总知识项**：3 条
-- **领域分布**：学术(1) + 技术(1) + 商业(1)
-- **类型分布**：术语(1) + 规则(1) + 案例(1)
-- **向量数据库**：Qdrant 集合正常运行，等待文档上传
+- **总知识项**：4 条
+- **领域分布**：学术(2) + 技术(1) + 商业(1)
+- **类型分布**：术语(2) + 规则(1) + 案例(1)
+- **向量数据库**：Qdrant 集合正常运行，支持向量存储和检索
+- **向量统计**：1 个向量点已成功存储
+
+### 🔧 技术修复详情
+1. **Qdrant 客户端升级**：
+   ```bash
+   npm uninstall qdrant-client
+   npm install @qdrant/js-client-rest uuid @types/uuid
+   ```
+
+2. **API 方法修正**：
+   - `client.getCollections()` → `client.getCollections()`
+   - `client.createCollection()` → `client.createCollection()`
+   - `client.upsert()` → `client.upsert()`
+   - `client.search()` → `client.search()`
+
+3. **向量操作修复**：
+   - 使用数字 ID 而不是字符串 ID（Qdrant 要求）
+   - 在 payload 中保存原始 ID 用于外部引用
+   - 智能清理 payload 数据，过滤不支持的类型
+   - 支持嵌套对象和数组的递归清理
+
+4. **数据类型处理**：
+   - 所有向量点 ID 使用数字类型
+   - Payload 数据智能清理，支持字符串、数字、布尔值、数组
+   - 自动过滤 null、undefined 和复杂对象
+   - 确保向量维度统一为 1024
 
 ## 🚀 核心功能
 
