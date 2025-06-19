@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { KnowledgeRetriever, KnowledgeItem } from '@/lib/rag/knowledge-retriever';
+import { NewKnowledgeRetriever } from '@/lib/rag/new-knowledge-retriever';
 
 /**
- * 知识库管理API
+ * 知识库管理API - 使用新的 Qdrant + PostgreSQL 方案
  */
 
 // GET: 获取知识库统计信息
 export async function GET() {
   try {
-    const retriever = new KnowledgeRetriever();
+    const retriever = new NewKnowledgeRetriever();
     const stats = await retriever.getKnowledgeStats();
     
     return NextResponse.json({
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { action, knowledge } = body;
     
-    const retriever = new KnowledgeRetriever();
+    const retriever = new NewKnowledgeRetriever();
     
     if (action === 'initialize') {
       // 初始化知识库
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     
     if (action === 'add' && knowledge) {
       // 添加单个知识项
-      const knowledgeItem: KnowledgeItem = {
+      const knowledgeItem = {
         id: knowledge.id || `custom_${Date.now()}`,
         type: knowledge.type || 'terminology',
         domain: knowledge.domain || 'general',
@@ -93,7 +93,7 @@ export async function PUT(request: NextRequest) {
       }, { status: 400 });
     }
     
-    const retriever = new KnowledgeRetriever();
+    const retriever = new NewKnowledgeRetriever();
     await retriever.learnFromFeedback(original, suggestion, feedback, domain);
     
     return NextResponse.json({
@@ -106,6 +106,36 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({
       success: false,
       error: '用户反馈学习失败'
+    }, { status: 500 });
+  }
+}
+
+// DELETE: 删除知识项
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    
+    if (!id) {
+      return NextResponse.json({
+        success: false,
+        error: '缺少知识项ID'
+      }, { status: 400 });
+    }
+    
+    const retriever = new NewKnowledgeRetriever();
+    await retriever.deleteKnowledgeItem(id);
+    
+    return NextResponse.json({
+      success: true,
+      message: '知识项删除成功'
+    });
+    
+  } catch (error) {
+    console.error('删除知识项失败:', error);
+    return NextResponse.json({
+      success: false,
+      error: '删除知识项失败'
     }, { status: 500 });
   }
 } 

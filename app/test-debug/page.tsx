@@ -39,7 +39,8 @@ export default function TestDebugPage() {
       }
     } catch (err) {
       console.error('请求异常:', err);
-      setError(`请求异常: ${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(`请求异常: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }

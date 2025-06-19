@@ -1,17 +1,5 @@
-import { Pinecone } from '@pinecone-database/pinecone';
-
-// 知识项接口
-export interface KnowledgeItem {
-  id: string;
-  type: 'terminology' | 'rule' | 'case' | 'style';
-  domain: string;
-  content: string;
-  context: string;
-  source: string;
-  confidence: number;
-  tags: string[];
-  relevance_score?: number;
-}
+import { QdrantVectorClient } from '../vector/qdrant-client';
+import { DatabaseModels, KnowledgeItem, FileMetadata } from '../database/models';
 
 // 领域信息接口
 export interface DomainInfo {
@@ -22,31 +10,29 @@ export interface DomainInfo {
 
 // 知识库统计接口
 export interface KnowledgeStats {
-  total_items: number;
+  total_files: number;
+  total_knowledge_items: number;
   domains: { [key: string]: number };
   types: { [key: string]: number };
   last_updated: string;
+  vector_stats: {
+    vectors_count: number;
+    points_count: number;
+  };
 }
 
 /**
- * 知识检索器类
- * 负责知识库的管理、检索和学习
+ * 新的知识检索器类
+ * 使用 Qdrant 向量数据库和 PostgreSQL 关系型数据库
  */
-export class KnowledgeRetriever {
-  private pinecone: Pinecone;
-  private index: any;
-  private readonly INDEX_NAME = 'knowledge-base';
+export class NewKnowledgeRetriever {
+  private vectorClient: QdrantVectorClient;
+  private dbModels: DatabaseModels;
   private readonly VECTOR_DIMENSION = 1024;
 
   constructor() {
-    const apiKey = process.env.PINECONE_API_KEY;
-    if (!apiKey) {
-      throw new Error('PINECONE_API_KEY 环境变量未设置');
-    }
-    
-    this.pinecone = new Pinecone({
-      apiKey: apiKey,
-    });
+    this.vectorClient = new QdrantVectorClient();
+    this.dbModels = new DatabaseModels();
   }
 
   /**
@@ -54,25 +40,15 @@ export class KnowledgeRetriever {
    */
   async initializeKnowledgeBase(): Promise<void> {
     try {
-      // 检查索引是否存在
-      const indexes = await this.pinecone.listIndexes();
-      const indexExists = indexes.some(index => index.name === this.INDEX_NAME);
+      // 初始化向量数据库
+      await this.vectorClient.initializeCollection();
       
-      if (!indexExists) {
-        // 创建新索引
-        await this.pinecone.createIndex({
-          name: this.INDEX_NAME,
-          dimension: this.VECTOR_DIMENSION,
-          metric: 'cosine',
-        });
-        
-        console.log('知识库索引创建成功');
-      }
+      // 初始化关系数据库
+      await this.dbModels.initializeTables();
       
-      this.index = this.pinecone.index(this.INDEX_NAME);
-      console.log('知识库初始化完成');
+      console.log('新知识库初始化完成');
     } catch (error) {
-      console.error('知识库初始化失败:', error);
+      console.error('新知识库初始化失败:', error);
       throw error;
     }
   }
@@ -80,17 +56,16 @@ export class KnowledgeRetriever {
   /**
    * 添加知识项
    */
-  async addKnowledgeItem(item: KnowledgeItem): Promise<void> {
+  async addKnowledgeItem(item: Omit<KnowledgeItem, 'vector_id' | 'created_at' | 'updated_at'>): Promise<void> {
     try {
-      if (!this.index) {
-        await this.initializeKnowledgeBase();
-      }
-
       // 生成向量嵌入
       const embedding = await this.generateEmbedding(item.content);
       
-      // 准备元数据
-      const metadata = {
+      // 生成向量ID
+      const vectorId = `vector_${item.id}_${Date.now()}`;
+      
+      // 准备向量载荷
+      const payload = {
         type: item.type,
         domain: item.domain,
         content: item.content,
@@ -101,16 +76,66 @@ export class KnowledgeRetriever {
         created_at: new Date().toISOString(),
       };
 
-      // 上传到 Pinecone
-      await this.index.upsert([{
-        id: item.id,
-        values: embedding,
-        metadata: metadata,
-      }]);
-
+      // 上传向量到 Qdrant
+      await this.vectorClient.upsertPoint(vectorId, embedding, payload);
+      
+      // 保存知识项到 PostgreSQL
+      const knowledgeItem: KnowledgeItem = {
+        ...item,
+        vector_id: vectorId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      
+      await this.dbModels.addKnowledgeItem(knowledgeItem);
+      
       console.log(`知识项 ${item.id} 添加成功`);
     } catch (error) {
       console.error('添加知识项失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 添加文件元数据
+   */
+  async addFileMetadata(
+    metadata: Omit<FileMetadata, 'created_at' | 'updated_at'>,
+    content: string
+  ): Promise<void> {
+    try {
+      // 生成向量嵌入
+      const embedding = await this.generateEmbedding(content);
+      
+      // 生成向量ID
+      const vectorId = `file_vector_${metadata.id}_${Date.now()}`;
+      
+      // 准备向量载荷
+      const payload = {
+        filename: metadata.filename,
+        file_type: metadata.file_type,
+        domain: metadata.domain,
+        tags: metadata.tags,
+        content_hash: metadata.content_hash,
+        created_at: new Date().toISOString(),
+      };
+
+      // 上传向量到 Qdrant
+      await this.vectorClient.upsertPoint(vectorId, embedding, payload);
+      
+      // 保存文件元数据到 PostgreSQL
+      const fileMetadata: FileMetadata = {
+        ...metadata,
+        vector_id: vectorId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      
+      await this.dbModels.addFileMetadata(fileMetadata);
+      
+      console.log(`文件元数据 ${metadata.id} 添加成功`);
+    } catch (error) {
+      console.error('添加文件元数据失败:', error);
       throw error;
     }
   }
@@ -125,43 +150,36 @@ export class KnowledgeRetriever {
     limit: number = 5
   ): Promise<KnowledgeItem[]> {
     try {
-      if (!this.index) {
-        await this.initializeKnowledgeBase();
-      }
-
       // 生成查询向量
       const queryEmbedding = await this.generateEmbedding(query);
       
       // 构建过滤条件
-      const filter: any = {};
+      const filter: Record<string, unknown> = {};
       if (domain) filter.domain = domain;
       if (type) filter.type = type;
 
-      // 执行向量搜索
-      const searchResponse = await this.index.query({
-        vector: queryEmbedding,
-        topK: limit,
-        filter: Object.keys(filter).length > 0 ? filter : undefined,
-        includeMetadata: true,
-      });
+      // 在 Qdrant 中搜索相似向量
+      const searchResults = await this.vectorClient.searchSimilar(
+        queryEmbedding,
+        limit,
+        Object.keys(filter).length > 0 ? filter : undefined
+      );
 
-      // 转换结果
-      const knowledgeItems: KnowledgeItem[] = searchResponse.matches?.map(match => ({
-        id: match.id,
-        type: match.metadata?.type as any,
-        domain: match.metadata?.domain as string,
-        content: match.metadata?.content as string,
-        context: match.metadata?.context as string,
-        source: match.metadata?.source as string,
-        confidence: match.metadata?.confidence as number,
-        tags: match.metadata?.tags as string[] || [],
-        relevance_score: match.score,
-      })) || [];
+      // 获取完整的知识项信息
+      const knowledgeItems: KnowledgeItem[] = [];
+      for (const result of searchResults) {
+        const knowledgeItem = await this.dbModels.getKnowledgeItemByVectorId(result.id);
+        if (knowledgeItem) {
+          knowledgeItems.push({
+            ...knowledgeItem,
+            relevance_score: result.score,
+          });
+        }
+      }
 
       return knowledgeItems;
     } catch (error) {
       console.error('检索相关知识失败:', error);
-      // 返回空数组作为降级
       return [];
     }
   }
@@ -171,37 +189,28 @@ export class KnowledgeRetriever {
    */
   async getKnowledgeStats(): Promise<KnowledgeStats> {
     try {
-      if (!this.index) {
-        await this.initializeKnowledgeBase();
-      }
-
-      // 获取索引统计信息
-      const stats = await this.index.describeIndexStats();
+      // 获取数据库统计
+      const dbStats = await this.dbModels.getKnowledgeStats();
       
-      // 解析统计信息
-      const domains: { [key: string]: number } = {};
-      const types: { [key: string]: number } = {};
+      // 获取向量数据库统计
+      const vectorStats = await this.vectorClient.getCollectionInfo();
       
-      if (stats.namespaces) {
-        for (const [namespace, info] of Object.entries(stats.namespaces)) {
-          // 这里需要根据实际的元数据结构来解析
-          // 暂时使用默认值
-        }
-      }
-
       return {
-        total_items: stats.totalVectorCount || 0,
-        domains,
-        types,
-        last_updated: new Date().toISOString(),
+        ...dbStats,
+        vector_stats: vectorStats,
       };
     } catch (error) {
       console.error('获取知识库统计失败:', error);
       return {
-        total_items: 0,
+        total_files: 0,
+        total_knowledge_items: 0,
         domains: {},
         types: {},
         last_updated: new Date().toISOString(),
+        vector_stats: {
+          vectors_count: 0,
+          points_count: 0,
+        },
       };
     }
   }
@@ -217,9 +226,9 @@ export class KnowledgeRetriever {
   ): Promise<void> {
     try {
       // 根据反馈创建新的知识项
-      const knowledgeItem: KnowledgeItem = {
+      const knowledgeItem = {
         id: `feedback_${Date.now()}`,
-        type: 'case',
+        type: 'case' as const,
         domain: domain,
         content: suggestion,
         context: `用户反馈: ${original} -> ${suggestion}`,
@@ -232,6 +241,31 @@ export class KnowledgeRetriever {
       console.log('用户反馈学习完成');
     } catch (error) {
       console.error('用户反馈学习失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 删除知识项
+   */
+  async deleteKnowledgeItem(id: string): Promise<void> {
+    try {
+      // 从数据库获取知识项以获取向量ID
+      const knowledgeItem = await this.dbModels.getKnowledgeItemByVectorId(id);
+      
+      if (knowledgeItem) {
+        // 删除向量
+        await this.vectorClient.deletePoint(knowledgeItem.vector_id);
+        
+        // 删除数据库记录
+        await this.dbModels.deleteKnowledgeItem(id);
+        
+        console.log(`知识项 ${id} 删除成功`);
+      } else {
+        console.warn(`知识项 ${id} 不存在`);
+      }
+    } catch (error) {
+      console.error('删除知识项失败:', error);
       throw error;
     }
   }
