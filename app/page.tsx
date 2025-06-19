@@ -154,7 +154,6 @@ export default function Home() {
               <Link href="#contact" className="text-gray-600 hover:text-gray-900 transition-colors">联系我们</Link>
             </div>
             <div className="hidden md:flex items-center space-x-4">
-              <Link href="/editor-rag" className="text-blue-600 hover:text-blue-700 transition-colors font-medium">RAG增强</Link>
               <button className="text-gray-600 hover:text-gray-900 transition-colors">登录</button>
               <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors btn-primary">
                 免费试用

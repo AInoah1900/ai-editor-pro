@@ -67,8 +67,7 @@ npm start
 ## 🌐 访问地址
 
 - **主页**: http://localhost:3000
-- **基础编辑器**: http://localhost:3000/editor
-- **RAG增强编辑器**: http://localhost:3000/editor-rag
+- **AI文档编辑器**: http://localhost:3000/editor
 - **知识库管理**: http://localhost:3000/knowledge-admin
 
 ## 🔧 最新更新与优化 (2024年12月)

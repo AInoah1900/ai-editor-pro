@@ -557,7 +557,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
             <div className="flex items-center space-x-2">
               <div className={`w-2 h-2 rounded-full ${isAnalyzing ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
               <span className="text-sm text-gray-600">
-                {isAnalyzing ? (isUsingRAG ? 'RAG增强分析中...' : 'AI分析中...') : (isUsingRAG ? 'RAG增强分析完成' : 'AI分析完成')}
+                {isAnalyzing ? (isUsingRAG ? 'AI分析中...' : 'AI分析中...') : (isUsingRAG ? 'AI分析完成' : 'AI分析完成')}
               </span>
             </div>
             
@@ -593,7 +593,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
               disabled={isAnalyzing}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
-              {isAnalyzing ? '分析中...' : (isUsingRAG ? 'RAG增强分析' : '重新分析')}
+              {isAnalyzing ? '分析中...' : (isUsingRAG ? 'AI分析' : '重新分析')}
             </button>
             
             <div className="flex items-center space-x-4 text-sm">
@@ -621,7 +621,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                 <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                <span className="font-medium text-blue-800">RAG增强分析</span>
+                <span className="font-medium text-blue-800">AI分析</span>
               </div>
               
               <div className="flex-1">

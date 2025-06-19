@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import DocumentEditor from './DocumentEditor';
+import RAGEnhancedEditor from './RAGEnhancedEditor';
 import UploadArea from './UploadArea';
 
 interface WorkAreaProps {
@@ -34,7 +34,7 @@ export default function WorkArea({ activeSubMenu, uploadedDocument, setUploadedD
       
       case 'editor':
         return uploadedDocument ? (
-          <DocumentEditor 
+          <RAGEnhancedEditor 
             content={uploadedDocument}
           />
         ) : (
