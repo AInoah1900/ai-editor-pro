@@ -16,6 +16,18 @@ interface ErrorItem {
   category: string;
 }
 
+interface RAGEnhancedResult {
+  errors: ErrorItem[];
+  domain_info: {
+    domain: string;
+    confidence: number;
+    keywords: string[];
+  };
+  knowledge_used: string[];
+  rag_confidence: number;
+  fallback_used: boolean;
+}
+
 interface CorrectionRecord {
   id: string;
   original: string;
@@ -28,9 +40,10 @@ interface EditingState {
   content: string;
 }
 
-export default function DocumentEditor({ content }: DocumentEditorProps) {
+export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
   const [documentContent, setDocumentContent] = useState(content);
   const [errors, setErrors] = useState<ErrorItem[]>([]);
+  const [ragResults, setRagResults] = useState<RAGEnhancedResult | null>(null);
   const [correctionRecords, setCorrectionRecords] = useState<CorrectionRecord[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [editingState, setEditingState] = useState<EditingState | null>(null);
@@ -40,166 +53,25 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
     suggestion: false
   });
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [isUsingRAG, setIsUsingRAG] = useState(true);
 
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // 生成模拟错误数据
-  const generateMockErrors = React.useCallback((): ErrorItem[] => {
-    const mockErrors: ErrorItem[] = [];
-    
-    if (!documentContent || documentContent.length === 0) {
-      return [];
+  // RAG增强的文档分析
+  const analyzeDocumentWithRAG = React.useCallback(async () => {
+    // 内容检查
+    if (!documentContent || documentContent.trim().length === 0) {
+      console.warn('文档内容为空，跳过分析');
+      return;
     }
 
-    // 1. 检测重复词汇（精确定位）
-    const duplicatePattern = /(\S{2,}?)\1+/g;
-    let match;
-    while ((match = duplicatePattern.exec(documentContent)) !== null && mockErrors.length < 10) {
-      const duplicateText = match[0];
-      const singleText = match[1];
-      
-      mockErrors.push({
-        id: `mock_duplicate_${match.index}`,
-        type: 'error',
-        position: { start: match.index, end: match.index + duplicateText.length },
-        original: duplicateText,
-        suggestion: singleText,
-        reason: `重复词汇"${singleText}"，建议删除多余部分`,
-        category: '语法错误'
-      });
-    }
-
-    // 2. 检测重复标点符号
-    const punctuationPattern = /([？。！，；：])\1+/g;
-    while ((match = punctuationPattern.exec(documentContent)) !== null && mockErrors.length < 10) {
-      const duplicatePunct = match[0];
-      const singlePunct = match[1];
-      
-      mockErrors.push({
-        id: `mock_punctuation_${match.index}`,
-        type: 'warning',
-        position: { start: match.index, end: match.index + duplicatePunct.length },
-        original: duplicatePunct,
-        suggestion: singlePunct,
-        reason: `重复标点符号"${singlePunct}"，建议删除多余部分`,
-        category: '标点错误'
-      });
-    }
-
-    // 3. 检测常见错误词汇
-    const commonErrors = [
-      { pattern: /的的/g, suggestion: '的', reason: '重复使用"的"字' },
-      { pattern: /了了/g, suggestion: '了', reason: '重复使用"了"字' },
-      { pattern: /在在/g, suggestion: '在', reason: '重复使用"在"字' },
-      { pattern: /是是/g, suggestion: '是', reason: '重复使用"是"字' },
-      { pattern: /和和/g, suggestion: '和', reason: '重复使用"和"字' },
-      { pattern: /或或/g, suggestion: '或', reason: '重复使用"或"字' },
-    ];
-
-    commonErrors.forEach(({ pattern, suggestion, reason }) => {
-      while ((match = pattern.exec(documentContent)) !== null && mockErrors.length < 10) {
-        mockErrors.push({
-          id: `mock_common_${match.index}`,
-          type: 'error',
-          position: { start: match.index, end: match.index + match[0].length },
-          original: match[0],
-          suggestion: suggestion,
-          reason: reason,
-          category: '语法错误'
-        });
-      }
-    });
-
-    // 4. 检测可能的错误表达
-    const expressionErrors = [
-      { pattern: /错误问题/g, suggestion: '错误', reason: '"错误问题"表达重复，建议简化' },
-      { pattern: /问题错误/g, suggestion: '问题', reason: '"问题错误"表达重复，建议简化' },
-      { pattern: /毛病问题/g, suggestion: '问题', reason: '"毛病问题"表达不当，建议使用"问题"' },
-      { pattern: /研究研究/g, suggestion: '研究', reason: '重复使用"研究"，建议删除多余部分' },
-      { pattern: /分析分析/g, suggestion: '分析', reason: '重复使用"分析"，建议删除多余部分' },
-      { pattern: /方法方法/g, suggestion: '方法', reason: '重复使用"方法"，建议删除多余部分' },
-    ];
-
-    expressionErrors.forEach(({ pattern, suggestion, reason }) => {
-      while ((match = pattern.exec(documentContent)) !== null && mockErrors.length < 10) {
-        mockErrors.push({
-          id: `mock_expression_${match.index}`,
-          type: 'error',
-          position: { start: match.index, end: match.index + match[0].length },
-          original: match[0],
-          suggestion: suggestion,
-          reason: reason,
-          category: '语法错误'
-        });
-      }
-    });
-
-    // 5. 检测标点符号错误
-    const punctErrors = [
-      { pattern: /？。/g, suggestion: '？', reason: '问号后不需要句号' },
-      { pattern: /。？/g, suggestion: '？', reason: '句号后不需要问号' },
-      { pattern: /！。/g, suggestion: '！', reason: '感叹号后不需要句号' },
-      { pattern: /。！/g, suggestion: '！', reason: '句号后不需要感叹号' },
-    ];
-
-    punctErrors.forEach(({ pattern, suggestion, reason }) => {
-      while ((match = pattern.exec(documentContent)) !== null && mockErrors.length < 10) {
-        mockErrors.push({
-          id: `mock_punct_error_${match.index}`,
-          type: 'warning',
-          position: { start: match.index, end: match.index + match[0].length },
-          original: match[0],
-          suggestion: suggestion,
-          reason: reason,
-          category: '标点错误'
-        });
-      }
-    });
-
-    // 6. 检测过长句子（建议优化）
-    const sentences = documentContent.split(/[。！？]/);
-    let currentPos = 0;
-    
-    sentences.forEach((sentence, index) => {
-      if (sentence.length > 60 && mockErrors.length < 10) {
-        const sentenceStart = documentContent.indexOf(sentence, currentPos);
-        if (sentenceStart !== -1) {
-          mockErrors.push({
-            id: `mock_long_sentence_${index}`,
-            type: 'suggestion',
-            position: { start: sentenceStart, end: sentenceStart + sentence.length },
-            original: sentence,
-            suggestion: `${sentence.substring(0, 30)}...（建议分句）`,
-            reason: '句子过长，建议分解为多个短句以提高可读性',
-            category: '表达优化'
-          });
-        }
-      }
-      currentPos += sentence.length + 1; // +1 for the punctuation
-    });
-
-    // 如果没有找到任何错误，添加一个示例
-    if (mockErrors.length === 0) {
-      const sampleText = documentContent.substring(0, Math.min(20, documentContent.length));
-      mockErrors.push({
-        id: 'mock_demo_1',
-        type: 'suggestion',
-        position: { start: 0, end: sampleText.length },
-        original: sampleText,
-        suggestion: '建议优化开头表达',
-        reason: '文档开头可以更加吸引读者',
-        category: '整体优化'
-      });
-    }
-
-    return mockErrors;
-  }, [documentContent]);
-
-  // 调用DeepSeek API进行文档分析
-  const analyzeDocument = React.useCallback(async () => {
     setIsAnalyzing(true);
     try {
-      const response = await fetch('/api/analyze-document', {
+      const endpoint = isUsingRAG ? '/api/analyze-document-rag' : '/api/analyze-document';
+      
+      console.log('发送分析请求:', { endpoint, contentLength: documentContent.length, isUsingRAG });
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -207,9 +79,24 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
         body: JSON.stringify({ content: documentContent }),
       });
 
+      console.log('API响应状态:', response.status, response.statusText);
+
       if (response.ok) {
+        // 检查响应内容类型
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          console.error('API返回了非JSON响应:', contentType);
+          const textResponse = await response.text();
+          console.error('响应内容:', textResponse.substring(0, 200));
+          throw new Error('API返回了非JSON响应');
+        }
+
         const result = await response.json();
-        console.log('API返回结果:', result);
+        console.log('分析结果:', result);
+        
+        if (isUsingRAG && result.domain_info) {
+          setRagResults(result);
+        }
         
         if (result.errors && Array.isArray(result.errors)) {
           const validatedErrors = result.errors.map((error: {
@@ -221,7 +108,7 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
             reason?: string;
             category?: string;
           }, index: number) => ({
-            id: error.id || `api_error_${Date.now()}_${index}`,
+            id: error.id || `error_${Date.now()}_${index}`,
             type: (error.type as 'error' | 'warning' | 'suggestion') || 'warning',
             position: error.position || { start: index * 10, end: index * 10 + 5 },
             original: error.original || '未知错误',
@@ -232,20 +119,34 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
           
           setErrors(validatedErrors);
         } else {
-          console.warn('API返回数据格式异常:', result);
-          setErrors(generateMockErrors());
+          console.warn('分析结果格式异常:', result);
+          setErrors([]);
         }
       } else {
-        console.error('分析失败:', response.status, response.statusText);
-        setErrors(generateMockErrors());
+        // 获取错误详情
+        let errorText = '';
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorResult = await response.json();
+            errorText = errorResult.error || response.statusText;
+          } else {
+            errorText = await response.text();
+          }
+        } catch (e) {
+          errorText = response.statusText;
+        }
+        
+        console.error('分析失败:', response.status, errorText);
+        throw new Error(`${response.status} "${errorText}"`);
       }
     } catch (error) {
-      console.error('API调用失败:', error);
-      setErrors(generateMockErrors());
+      console.error('分析调用失败:', error);
+      throw error; // 重新抛出错误，让调用者处理
     } finally {
       setIsAnalyzing(false);
     }
-  }, [documentContent, generateMockErrors]);
+  }, [documentContent, isUsingRAG]);
 
   // 获取错误类型的样式
   const getErrorStyle = (type: string) => {
@@ -276,7 +177,7 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
   };
 
   // 应用修改
-  const applyCorrection = (errorId: string, newSuggestion?: string) => {
+  const applyCorrection = async (errorId: string, newSuggestion?: string) => {
     const error = errors.find(e => e.id === errorId);
     if (error) {
       const suggestion = newSuggestion || error.suggestion;
@@ -291,13 +192,66 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
         timestamp: new Date()
       }]);
 
+              // RAG用户反馈学习
+        if (isUsingRAG && ragResults) {
+          try {
+            const response = await fetch('/api/knowledge-base', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                original: error.original,
+                suggestion: suggestion,
+                feedback: 'accept',
+                domain: ragResults.domain_info.domain,
+                finalVersion: suggestion
+              })
+            });
+
+            if (response.ok) {
+              const result = await response.json();
+              console.log('用户反馈学习完成: 接受建议', result);
+            } else {
+              console.error('用户反馈学习失败: 响应状态', response.status);
+            }
+          } catch (error) {
+            console.error('用户反馈学习失败:', error);
+          }
+        }
+
       // 移除已处理的错误
       setErrors(errors.filter(e => e.id !== errorId));
     }
   };
 
   // 忽略错误
-  const ignoreError = (errorId: string) => {
+  const ignoreError = async (errorId: string) => {
+    const error = errors.find(e => e.id === errorId);
+    
+    // RAG用户反馈学习
+    if (isUsingRAG && ragResults && error) {
+      try {
+        const response = await fetch('/api/knowledge-base', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            original: error.original,
+            suggestion: error.suggestion,
+            feedback: 'reject',
+            domain: ragResults.domain_info.domain
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('用户反馈学习完成: 拒绝建议', result);
+        } else {
+          console.error('用户反馈学习失败: 响应状态', response.status);
+        }
+      } catch (error) {
+        console.error('用户反馈学习失败:', error);
+      }
+    }
+    
     setErrors(errors.filter(e => e.id !== errorId));
   };
 
@@ -307,7 +261,7 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
   };
 
   // 保存编辑
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editingState) {
       const error = errors.find(e => e.id === editingState.errorId);
       if (error) {
@@ -321,6 +275,32 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
           corrected: editingState.content,
           timestamp: new Date()
         }]);
+
+        // RAG用户反馈学习 - 自定义编辑
+        if (isUsingRAG && ragResults) {
+          try {
+            const response = await fetch('/api/knowledge-base', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                original: error.original,
+                suggestion: error.suggestion,
+                feedback: 'modify',
+                domain: ragResults.domain_info.domain,
+                finalVersion: editingState.content
+              })
+            });
+
+            if (response.ok) {
+              const result = await response.json();
+              console.log('用户反馈学习完成: 自定义修改', result);
+            } else {
+              console.error('用户反馈学习失败: 响应状态', response.status);
+            }
+          } catch (error) {
+            console.error('用户反馈学习失败:', error);
+          }
+        }
 
         // 移除已处理的错误
         setErrors(errors.filter(e => e.id !== editingState.errorId));
@@ -450,6 +430,16 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
                     {error.reason}
                   </div>
                   
+                  {/* RAG增强信息 */}
+                  {isUsingRAG && ragResults && (
+                    <div className="text-xs opacity-60 border-t pt-1">
+                      <span className="text-blue-600">RAG增强</span>
+                      {ragResults.knowledge_used.length > 0 && (
+                        <span className="ml-1">· 基于专业知识库</span>
+                      )}
+                    </div>
+                  )}
+                  
                   {/* 操作按钮 */}
                   <div className="flex items-center space-x-2 pt-1">
                     <button
@@ -528,14 +518,29 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
     );
   };
 
-  useEffect(() => {
-    if (content) {
-      setDocumentContent(content);
-      setTimeout(() => {
-        analyzeDocument();
-      }, 1000);
+  // 自动分析文档
+  const performAutoAnalysis = React.useCallback(async () => {
+    try {
+      await analyzeDocumentWithRAG();
+    } catch (error) {
+      console.error('自动分析失败:', error);
+      setErrors([]);
     }
-  }, [content, analyzeDocument]);
+  }, [analyzeDocumentWithRAG]);
+
+  useEffect(() => {
+    if (content && content.trim().length > 0) {
+      setDocumentContent(content);
+      // 延迟1秒后自动分析，避免频繁调用
+      const timer = setTimeout(() => {
+        performAutoAnalysis();
+      }, 1000);
+      
+      return () => {
+        clearTimeout(timer);
+      };
+    }
+  }, [content, performAutoAnalysis]);
 
   const stats = getErrorStats();
   const categories = getCategories();
@@ -552,18 +557,43 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
             <div className="flex items-center space-x-2">
               <div className={`w-2 h-2 rounded-full ${isAnalyzing ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
               <span className="text-sm text-gray-600">
-                {isAnalyzing ? 'AI分析中...' : 'AI分析完成'}
+                {isAnalyzing ? (isUsingRAG ? 'RAG增强分析中...' : 'AI分析中...') : (isUsingRAG ? 'RAG增强分析完成' : 'AI分析完成')}
               </span>
+            </div>
+            
+            {/* RAG功能开关 */}
+            <div className="flex items-center space-x-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={isUsingRAG}
+                  onChange={(e) => setIsUsingRAG(e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="text-sm text-blue-600 font-medium">RAG增强</span>
+              </label>
+              {ragResults && isUsingRAG && (
+                <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                  {ragResults.domain_info.domain} · {(ragResults.rag_confidence * 100).toFixed(0)}%
+                </div>
+              )}
             </div>
           </div>
           
           <div className="flex items-center space-x-2">
             <button
-              onClick={analyzeDocument}
+              onClick={async () => {
+                try {
+                  await analyzeDocumentWithRAG();
+                } catch (error) {
+                  console.error('手动分析失败:', error);
+                  setErrors([]);
+                }
+              }}
               disabled={isAnalyzing}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
-              {isAnalyzing ? '分析中...' : '重新分析'}
+              {isAnalyzing ? '分析中...' : (isUsingRAG ? 'RAG增强分析' : '重新分析')}
             </button>
             
             <div className="flex items-center space-x-4 text-sm">
@@ -583,6 +613,51 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
           </div>
         </div>
 
+        {/* RAG增强信息面板 */}
+        {isUsingRAG && ragResults && (
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-b border-blue-200 p-3">
+            <div className="flex items-start space-x-4 text-sm">
+              <div className="flex items-center space-x-2">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <span className="font-medium text-blue-800">RAG增强分析</span>
+              </div>
+              
+              <div className="flex-1">
+                <div className="flex items-center space-x-4">
+                  <div>
+                    <span className="text-blue-700">检测领域: </span>
+                    <span className="font-medium text-blue-900">{ragResults.domain_info.domain}</span>
+                    <span className="text-blue-600 ml-1">({(ragResults.domain_info.confidence * 100).toFixed(0)}%)</span>
+                  </div>
+                  
+                  <div>
+                    <span className="text-blue-700">知识库应用: </span>
+                    <span className="font-medium text-blue-900">{ragResults.knowledge_used.length}条</span>
+                  </div>
+                  
+                  <div>
+                    <span className="text-blue-700">RAG置信度: </span>
+                    <span className="font-medium text-blue-900">{(ragResults.rag_confidence * 100).toFixed(0)}%</span>
+                  </div>
+                </div>
+                
+                {ragResults.domain_info.keywords.length > 0 && (
+                  <div className="mt-1">
+                    <span className="text-blue-700 text-xs">关键词: </span>
+                    {ragResults.domain_info.keywords.slice(0, 6).map((keyword, index) => (
+                      <span key={index} className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded mr-1">
+                        {keyword}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 使用说明 */}
         <div className="bg-blue-50 border-b border-blue-200 p-3">
           <div className="flex items-center space-x-2 text-sm text-blue-800">
@@ -591,7 +666,8 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
             </svg>
             <span>
               <strong>使用说明:</strong> 
-              悬停彩色标注查看AI建议 → 点击&quot;应用&quot;一键替换 → 点击&quot;忽略&quot;跳过建议 → 直接点击标注文字进行自定义编辑
+              {isUsingRAG ? 'RAG增强模式已启用，基于专业知识库提供更精确的纠错建议' : '使用基础AI分析模式'} → 
+              悬停彩色标注查看建议 → 点击&quot;应用&quot;一键替换 → 点击&quot;忽略&quot;跳过建议 → 直接点击标注文字进行自定义编辑
             </span>
           </div>
           <div className="mt-2 flex items-center space-x-4 text-xs text-blue-700">
@@ -657,6 +733,31 @@ export default function DocumentEditor({ content }: DocumentEditorProps) {
             </select>
           </div>
         </div>
+
+        {/* RAG知识库信息 */}
+        {isUsingRAG && ragResults && ragResults.knowledge_used.length > 0 && (
+          <div className="p-4 border-b border-gray-200 bg-white">
+            <h5 className="font-medium text-gray-900 mb-3 flex items-center">
+              <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              应用的专业知识
+            </h5>
+            
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {ragResults.knowledge_used.slice(0, 3).map((knowledge, index) => (
+                <div key={index} className="bg-blue-50 p-2 rounded text-xs text-blue-800">
+                  <div className="font-medium">{knowledge.substring(0, 50)}...</div>
+                </div>
+              ))}
+              {ragResults.knowledge_used.length > 3 && (
+                <div className="text-xs text-gray-500 text-center">
+                  还有 {ragResults.knowledge_used.length - 3} 条知识应用
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* 一键纠错 */}
         <div className="p-4 border-b border-gray-200 bg-white">

@@ -6,11 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test-deepseek": "node scripts/test-deepseek-connection.js",
+    "test-rag": "node scripts/test-rag.js",
+    "test-vector-fix": "node scripts/test-vector-fix.js",
+    "test-json": "node scripts/test-json-parsing.js",
+    "init-knowledge": "npx ts-node scripts/init-knowledge-base.ts"
   },
   "dependencies": {
+    "@pinecone-database/pinecone": "^6.1.0",
+    "dotenv": "^16.5.0",
     "mammoth": "^1.9.1",
     "next": "15.3.2",
+    "openai": "^5.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -23,6 +31,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.2",
     "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }

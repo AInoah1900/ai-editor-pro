@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // 从环境变量中获取API配置
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com/chat/completions';
 
 // 验证必要的环境变量
 if (!DEEPSEEK_API_KEY) {
@@ -83,40 +82,28 @@ ${content}
 请只返回JSON格式的结果，确保original字段精确匹配文档中的错误文字。
 `;
 
-    const response = await fetch(DEEPSEEK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          {
-            role: 'system',
-            content: '你是一个专业的期刊编辑和校对专家，擅长发现文档中的各种错误并提供准确的修改建议。请严格按照要求的JSON格式返回结果。'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.1,
-        max_tokens: 4000,
-        stream: false
-      }),
+    // 使用新的DeepSeek客户端
+    const { createDeepSeekClient } = await import('@/lib/deepseek/deepseek-client');
+    const deepSeekClient = createDeepSeekClient(DEEPSEEK_API_KEY);
+    
+    const response = await deepSeekClient.createChatCompletion({
+      model: 'deepseek-chat',
+      messages: [
+        {
+          role: 'system',
+          content: '你是一个专业的期刊编辑和校对专家，擅长发现文档中的各种错误并提供准确的修改建议。请严格按照要求的JSON格式返回结果。'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 4000,
+      stream: false
     });
 
-    if (!response.ok) {
-      console.error('DeepSeek API错误:', response.status, response.statusText);
-      // 返回模拟数据作为备选
-      return NextResponse.json({
-        errors: generateFallbackErrors(content)
-      });
-    }
-
-    const data = await response.json();
-    const aiResponse = data.choices[0]?.message?.content;
+    const aiResponse = response.choices[0]?.message?.content;
 
     if (!aiResponse) {
       return NextResponse.json({

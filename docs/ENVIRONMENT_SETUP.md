@@ -29,7 +29,7 @@ code .env.local
 
 | 变量名 | 必需 | 说明 | 示例值 |
 |--------|------|------|--------|
-| `DEEPSEEK_API_KEY` | ✅ | DeepSeek API密钥 | `***REMOVED***xxxxxxxxxxxxxxxx` |
+| `DEEPSEEK_API_KEY` | ✅ | DeepSeek API密钥 | `sk-xxxxxxxxxxxxxxxx` |
 | `DEEPSEEK_API_URL` | ❌ | DeepSeek API端点 | `https://api.deepseek.com/chat/completions` |
 
 #### 获取DeepSeek API密钥
