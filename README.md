@@ -43,6 +43,8 @@
 - **文档上传**: 支持多种格式文档上传
 - **RAG增强编辑**: 智能编辑建议和实时纠错
 - **搜索知识库**: 综合搜索知识项和相关文档
+- **专属知识库**: 管理个人专业文档资料
+- **共享知识库**: 访问团队共享的知识资源
 - **文档管理**: 编辑历史、文档下载等功能
 
 ### 2. 知识库管理 (`/knowledge-admin`)
@@ -63,6 +65,26 @@
 - **在线预览**: 支持文档在线打开和预览
 - **文档下载**: 一键下载原始文档
 - **元数据展示**: 文件大小、类型、上传时间、领域标签等信息
+
+## 📚 知识库管理特性
+
+### 专属知识库
+- **个人文档管理**: 用户专属的文档资料库
+- **私有访问控制**: 仅文档所有者可访问
+- **个性化分类**: 支持个人领域和标签分类
+- **安全隔离**: 与其他用户文档完全隔离
+
+### 共享知识库
+- **团队协作**: 团队成员共享的知识资源
+- **公共访问**: 所有用户都可以访问和使用
+- **统一管理**: 集中管理团队知识资产
+- **版本同步**: 保持知识库内容的一致性
+
+### 文档所有权管理
+- **双重架构**: 专属(private)和共享(shared)两种所有权类型
+- **灵活分配**: 支持文档所有权的灵活分配
+- **权限控制**: 基于所有权的访问权限控制
+- **统计分析**: 分别统计专属和共享知识库的使用情况
 
 ## 🛠️ 安装与使用
 
@@ -108,7 +130,26 @@ node scripts/init-db.sql
 node scripts/add-sample-documents.js
 node scripts/add-documents-to-db.js
 node scripts/add-file-metadata-to-db.js
+
+# 更新数据库结构（添加文档所有权字段）
+node scripts/update-document-ownership.js
 ```
+
+## 🔧 问题修复记录
+
+### 搜索功能数据结构兼容性修复
+**问题**: 搜索知识库时出现 "Cannot read properties of undefined (reading 'knowledge')" 错误
+
+**原因**: API返回的数据结构与前端期望的不匹配
+- API返回: `{ success: true, knowledge_items: [...], related_documents: [...] }`
+- 前端期望: `{ success: true, data: { knowledge: [...], documents: [...] } }`
+
+**修复**: 
+- 修正前端代码，直接访问 `data.knowledge_items` 和 `data.related_documents`
+- 确保API和前端数据结构一致性
+- 添加容错处理，避免undefined访问错误
+
+**状态**: ✅ 已修复并通过测试验证
 
 ## 🧪 测试与验证
 
@@ -122,15 +163,25 @@ node scripts/test-qdrant-search.js
 
 # 测试文档搜索
 node scripts/test-document-search.js
+
+# 测试知识库功能
+node scripts/test-knowledge-library.js
+
+# 完整功能演示
+node scripts/demo-knowledge-library.js
 ```
 
 ### 功能验证
 - ✅ 文档上传和处理
 - ✅ RAG增强编辑
-- ✅ 知识库搜索
+- ✅ 知识库搜索（已修复数据结构兼容性问题）
+- ✅ 专属知识库管理
+- ✅ 共享知识库访问
 - ✅ 文档搜索和打开
+- ✅ 文档在线预览和下载
 - ✅ 向量相似度检索
 - ✅ 多领域知识分类
+- ✅ 前端搜索界面错误修复
 
 ## 📚 API文档
 
@@ -138,6 +189,15 @@ node scripts/test-document-search.js
 ```typescript
 // 搜索知识库
 GET /api/knowledge-base?query=关键词&domain=领域&type=类型&includeDocuments=true
+
+// 获取专属知识库文档
+GET /api/knowledge-base?action=getLibraryFiles&libraryType=private&ownerId=用户ID
+
+// 获取共享知识库文档
+GET /api/knowledge-base?action=getLibraryFiles&libraryType=shared
+
+// 获取知识库统计信息
+GET /api/knowledge-base?action=getLibraryStats
 
 // 添加知识项
 POST /api/knowledge-base

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { DatabaseModels } from '@/lib/database/models';
 import { NewKnowledgeRetriever } from '@/lib/rag/new-knowledge-retriever';
 
 /**
@@ -9,77 +10,86 @@ import { NewKnowledgeRetriever } from '@/lib/rag/new-knowledge-retriever';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const query = searchParams.get('query');
-    
+    const action = searchParams.get('action') || 'search';
+    const query = searchParams.get('query') || '';
+    const domain = searchParams.get('domain') || '';
+    const type = searchParams.get('type') || '';
+    const includeDocuments = searchParams.get('includeDocuments') === 'true';
+    const libraryType = searchParams.get('libraryType'); // 'private' | 'shared'
+    const ownerId = searchParams.get('ownerId') || 'default_user'; // 默认用户ID
+
+    const dbModels = new DatabaseModels();
     const retriever = new NewKnowledgeRetriever();
-    
-    // 如果有查询参数，执行搜索
-    if (query) {
-      const domain = searchParams.get('domain') || undefined;
-      const type = searchParams.get('type') || undefined;
-      const limit = parseInt(searchParams.get('limit') || '10');
-      const includeDocuments = searchParams.get('includeDocuments') === 'true';
+
+    // 获取知识库文档列表
+    if (action === 'getLibraryFiles') {
+      let files;
       
-      console.log('执行知识库搜索:', { query, domain, type, limit, includeDocuments });
-      
-      if (includeDocuments) {
-        // 综合搜索：返回知识项和相关文档
-        const searchResults = await retriever.comprehensiveSearch(
-          query,
-          domain,
-          type,
-          limit,
-          limit
-        );
-        
-        return NextResponse.json({
-          success: true,
-          data: {
-            knowledge: searchResults.knowledge,
-            documents: searchResults.documents
-          },
-          query: {
-            text: query,
-            domain,
-            type,
-            limit,
-            includeDocuments
-          }
-        });
+      if (libraryType === 'private') {
+        files = await dbModels.getPrivateFiles(ownerId);
+      } else if (libraryType === 'shared') {
+        files = await dbModels.getSharedFiles();
       } else {
-        // 只返回知识项
-        const searchResults = await retriever.retrieveRelevantKnowledge(
-          query,
-          domain,
-          type,
-          limit
-        );
-        
-        return NextResponse.json({
-          success: true,
-          data: searchResults,
-          query: {
-            text: query,
-            domain,
-            type,
-            limit
-          }
-        });
+        return NextResponse.json({ 
+          error: '请指定知识库类型 (private 或 shared)' 
+        }, { status: 400 });
       }
+
+      return NextResponse.json({
+        success: true,
+        files,
+        total: files.length,
+        libraryType,
+      });
     }
-    
-    // 否则返回统计信息
-    const stats = await retriever.getKnowledgeStats();
-    
-    return NextResponse.json({
-      success: true,
-      data: stats
-    });
+
+    // 获取知识库统计信息
+    if (action === 'getLibraryStats') {
+      const stats = await dbModels.getKnowledgeLibraryStats();
+      return NextResponse.json({
+        success: true,
+        stats,
+      });
+    }
+
+    // 原有的搜索功能
+    if (includeDocuments) {
+      // 综合搜索：同时返回知识项和相关文档
+      const result = await retriever.comprehensiveSearch(
+        query,
+        domain || undefined,
+        type || undefined,
+        10,
+        10
+      );
+
+      return NextResponse.json({
+        success: true,
+        knowledge_items: result.knowledge,
+        related_documents: result.documents,
+        total_knowledge: result.knowledge.length,
+        total_documents: result.documents.length,
+      });
+    } else {
+      // 仅搜索知识项
+      const knowledgeItems = await retriever.retrieveRelevantKnowledge(
+        query,
+        domain || undefined,
+        type || undefined,
+        10
+      );
+
+      return NextResponse.json({
+        success: true,
+        knowledge_items: knowledgeItems,
+        total: knowledgeItems.length,
+      });
+    }
   } catch (error) {
-    console.error('知识库操作失败:', error);
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : '知识库操作失败'
+    console.error('知识库API错误:', error);
+    return NextResponse.json({ 
+      error: '知识库操作失败',
+      details: error instanceof Error ? error.message : '未知错误'
     }, { status: 500 });
   }
 }

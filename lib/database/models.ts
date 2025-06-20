@@ -51,6 +51,8 @@ export interface FileMetadata {
   content_hash: string;
   domain?: string;
   tags?: string[];
+  ownership_type: 'private' | 'shared';
+  owner_id?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -103,6 +105,8 @@ export class DatabaseModels {
           content_hash VARCHAR(255) NOT NULL,
           domain VARCHAR(100),
           tags TEXT[],
+          ownership_type VARCHAR(10) NOT NULL,
+          owner_id VARCHAR(255),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -153,8 +157,8 @@ export class DatabaseModels {
       await client.query(`
         INSERT INTO file_metadata (
           id, filename, file_path, file_size, file_type, upload_time,
-          vector_id, content_hash, domain, tags, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          vector_id, content_hash, domain, tags, ownership_type, owner_id, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         ON CONFLICT (id) DO UPDATE SET
           filename = EXCLUDED.filename,
           file_path = EXCLUDED.file_path,
@@ -165,6 +169,8 @@ export class DatabaseModels {
           content_hash = EXCLUDED.content_hash,
           domain = EXCLUDED.domain,
           tags = EXCLUDED.tags,
+          ownership_type = EXCLUDED.ownership_type,
+          owner_id = EXCLUDED.owner_id,
           updated_at = CURRENT_TIMESTAMP
       `, [
         metadata.id,
@@ -177,6 +183,8 @@ export class DatabaseModels {
         metadata.content_hash,
         metadata.domain,
         metadata.tags,
+        metadata.ownership_type,
+        metadata.owner_id,
         metadata.created_at,
         metadata.updated_at,
       ]);
@@ -469,6 +477,121 @@ export class DatabaseModels {
     } catch (error) {
       console.error('获取所有文档失败:', error);
       return [];
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 获取专属知识库文档
+   */
+  async getPrivateFiles(ownerId: string, limit: number = 50): Promise<FileMetadata[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM file_metadata 
+        WHERE ownership_type = 'private' AND owner_id = $1
+        ORDER BY upload_time DESC 
+        LIMIT $2
+      `, [ownerId, limit]);
+
+      return result.rows as FileMetadata[];
+    } catch (error) {
+      console.error('获取专属知识库文档失败:', error);
+      return [];
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 获取共享知识库文档
+   */
+  async getSharedFiles(limit: number = 50): Promise<FileMetadata[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM file_metadata 
+        WHERE ownership_type = 'shared'
+        ORDER BY upload_time DESC 
+        LIMIT $1
+      `, [limit]);
+
+      return result.rows as FileMetadata[];
+    } catch (error) {
+      console.error('获取共享知识库文档失败:', error);
+      return [];
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 获取知识库文档统计
+   */
+  async getKnowledgeLibraryStats(): Promise<{
+    total_private: number;
+    total_shared: number;
+    private_by_domain: { [key: string]: number };
+    shared_by_domain: { [key: string]: number };
+  }> {
+    const client = await this.pool.getClient();
+    
+    try {
+      // 获取专属文档统计
+      const privateStats = await client.query(`
+        SELECT COUNT(*) as total_private FROM file_metadata 
+        WHERE ownership_type = 'private'
+      `);
+
+      // 获取共享文档统计
+      const sharedStats = await client.query(`
+        SELECT COUNT(*) as total_shared FROM file_metadata 
+        WHERE ownership_type = 'shared'
+      `);
+
+      // 获取专属文档按领域分布
+      const privateDomainStats = await client.query(`
+        SELECT domain, COUNT(*) as count 
+        FROM file_metadata 
+        WHERE ownership_type = 'private' AND domain IS NOT NULL
+        GROUP BY domain
+      `);
+
+      // 获取共享文档按领域分布
+      const sharedDomainStats = await client.query(`
+        SELECT domain, COUNT(*) as count 
+        FROM file_metadata 
+        WHERE ownership_type = 'shared' AND domain IS NOT NULL
+        GROUP BY domain
+      `);
+
+      const private_by_domain: { [key: string]: number } = {};
+      privateDomainStats.rows.forEach((row: { domain: string; count: string }) => {
+        private_by_domain[row.domain] = parseInt(row.count);
+      });
+
+      const shared_by_domain: { [key: string]: number } = {};
+      sharedDomainStats.rows.forEach((row: { domain: string; count: string }) => {
+        shared_by_domain[row.domain] = parseInt(row.count);
+      });
+
+      return {
+        total_private: parseInt(privateStats.rows[0].total_private),
+        total_shared: parseInt(sharedStats.rows[0].total_shared),
+        private_by_domain,
+        shared_by_domain,
+      };
+    } catch (error) {
+      console.error('获取知识库统计失败:', error);
+      return {
+        total_private: 0,
+        total_shared: 0,
+        private_by_domain: {},
+        shared_by_domain: {},
+      };
     } finally {
       client.release();
     }

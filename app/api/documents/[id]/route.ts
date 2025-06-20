@@ -35,7 +35,7 @@ export async function GET(
       // 返回文档信息
       return NextResponse.json({
         success: true,
-        data: fileMetadata
+        file: fileMetadata
       });
     }
 

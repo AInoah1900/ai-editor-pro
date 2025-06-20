@@ -27,6 +27,8 @@ interface FileMetadata {
   content_hash: string;
   domain?: string;
   tags?: string[];
+  ownership_type: 'private' | 'shared';
+  owner_id?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -55,6 +57,198 @@ export default function WorkArea({
   const [selectedType, setSelectedType] = useState<string>('');
   const [showDocuments, setShowDocuments] = useState(true);
 
+  // 知识库文档列表状态
+  const [libraryFiles, setLibraryFiles] = useState<FileMetadata[]>([]);
+  const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
+
+  // 加载知识库文档列表
+  const loadLibraryFiles = async (libraryType: 'private' | 'shared') => {
+    setIsLoadingLibrary(true);
+    setLibraryError(null);
+    
+    try {
+      const params = new URLSearchParams({
+        action: 'getLibraryFiles',
+        libraryType,
+        ownerId: 'default_user' // 实际应用中应该从用户会话获取
+      });
+      
+      const response = await fetch(`/api/knowledge-base?${params}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setLibraryFiles(data.files || []);
+      } else {
+        setLibraryError(data.error || '加载文档列表失败');
+        setLibraryFiles([]);
+      }
+    } catch (error) {
+      console.error('加载知识库文档失败:', error);
+      setLibraryError('网络错误，请检查连接');
+      setLibraryFiles([]);
+    } finally {
+      setIsLoadingLibrary(false);
+    }
+  };
+
+  // 当切换到知识库子菜单时自动加载文档
+  React.useEffect(() => {
+    if (activeSubMenu === 'personal') {
+      loadLibraryFiles('private');
+    } else if (activeSubMenu === 'shared') {
+      loadLibraryFiles('shared');
+    }
+  }, [activeSubMenu]);
+
+  // 渲染知识库文档列表
+  const renderLibraryDocuments = (libraryType: 'private' | 'shared') => {
+    if (isLoadingLibrary) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-500">正在加载文档...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (libraryError) {
+      return (
+        <div className="text-center py-12">
+          <div className="text-red-400 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h4 className="text-lg font-medium text-gray-900 mb-2">加载失败</h4>
+          <p className="text-gray-500 mb-4">{libraryError}</p>
+          <button
+            onClick={() => loadLibraryFiles(libraryType)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            重试
+          </button>
+        </div>
+      );
+    }
+
+    if (libraryFiles.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <div className="text-gray-400 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <h4 className="text-lg font-medium text-gray-900 mb-2">
+            {libraryType === 'private' ? '专属知识库为空' : '共享知识库为空'}
+          </h4>
+          <p className="text-gray-500 mb-4">
+            {libraryType === 'private' 
+              ? '您还没有上传任何个人文档' 
+              : '团队还没有共享任何文档'
+            }
+          </p>
+          <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            {libraryType === 'private' ? '上传个人文档' : '添加共享文档'}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between mb-6">
+          <h4 className="text-lg font-medium text-gray-900">
+            {libraryType === 'private' ? '专属知识库' : '共享知识库'} ({libraryFiles.length} 个文档)
+          </h4>
+          <button
+            onClick={() => loadLibraryFiles(libraryType)}
+            className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            刷新
+          </button>
+        </div>
+        
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {libraryFiles.map((doc) => (
+            <div key={doc.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1 min-w-0">
+                  <h5 className="text-sm font-medium text-gray-900 truncate" title={doc.filename}>
+                    {doc.filename}
+                  </h5>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="text-xs text-gray-500">
+                      {formatFileSize(doc.file_size)}
+                    </span>
+                    <span className="text-xs text-gray-400">•</span>
+                    <span className="text-xs text-gray-500 uppercase">
+                      {doc.file_type}
+                    </span>
+                  </div>
+                </div>
+                
+                {doc.domain && (
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    doc.domain === 'academic' ? 'bg-blue-100 text-blue-800' :
+                    doc.domain === 'medical' ? 'bg-red-100 text-red-800' :
+                    doc.domain === 'legal' ? 'bg-purple-100 text-purple-800' :
+                    doc.domain === 'technical' ? 'bg-green-100 text-green-800' :
+                    doc.domain === 'business' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {doc.domain === 'academic' ? '学术' :
+                     doc.domain === 'medical' ? '医学' :
+                     doc.domain === 'legal' ? '法律' :
+                     doc.domain === 'technical' ? '技术' :
+                     doc.domain === 'business' ? '商业' :
+                     '通用'}
+                  </span>
+                )}
+              </div>
+              
+              <div className="mb-3">
+                <p className="text-xs text-gray-500">
+                  上传时间: {formatDate(doc.upload_time)}
+                </p>
+                {doc.tags && doc.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {doc.tags.slice(0, 2).map((tag, tagIndex) => (
+                      <span key={tagIndex} className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
+                        {tag}
+                      </span>
+                    ))}
+                    {doc.tags.length > 2 && (
+                      <span className="text-xs text-gray-400">+{doc.tags.length - 2}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handleOpenDocument(doc)}
+                  className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  打开文档
+                </button>
+                <button
+                  onClick={() => handleDownloadDocument(doc)}
+                  className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  下载
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // 执行搜索
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -76,13 +270,13 @@ export default function WorkArea({
       const data = await response.json();
       
       if (data.success) {
-        if (showDocuments && data.data.knowledge && data.data.documents) {
+        if (showDocuments && data.knowledge_items && data.related_documents) {
           // 综合搜索结果
-          setSearchResults(data.data.knowledge || []);
-          setRelatedDocuments(data.data.documents || []);
+          setSearchResults(data.knowledge_items || []);
+          setRelatedDocuments(data.related_documents || []);
         } else {
           // 只有知识项
-          setSearchResults(data.data || []);
+          setSearchResults(data.knowledge_items || []);
           setRelatedDocuments([]);
         }
       } else {
@@ -538,29 +732,7 @@ export default function WorkArea({
       
       case 'personal':
       case 'shared':
-        return (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="text-gray-400 mb-4">
-                <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {activeSubMenu === 'personal' ? '专属知识库' : '共享知识库'}
-              </h3>
-              <p className="text-gray-500 mb-6">
-                {activeSubMenu === 'personal' 
-                  ? '管理您的个人专业知识库' 
-                  : '访问团队共享的知识资源'
-                }
-              </p>
-              <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                添加知识条目
-              </button>
-            </div>
-          </div>
-        );
+        return renderLibraryDocuments(activeSubMenu);
       
       case 'login':
         return (
