@@ -103,147 +103,214 @@ export default function WorkArea({
 
   // 渲染知识库文档列表
   const renderLibraryDocuments = (libraryType: 'private' | 'shared') => {
-    if (isLoadingLibrary) {
-      return (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-500">正在加载文档...</p>
-          </div>
-        </div>
-      );
-    }
-
-    if (libraryError) {
-      return (
-        <div className="text-center py-12">
-          <div className="text-red-400 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h4 className="text-lg font-medium text-gray-900 mb-2">加载失败</h4>
-          <p className="text-gray-500 mb-4">{libraryError}</p>
-          <button
-            onClick={() => loadLibraryFiles(libraryType)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            重试
-          </button>
-        </div>
-      );
-    }
-
-    if (libraryFiles.length === 0) {
-      return (
-        <div className="text-center py-12">
-          <div className="text-gray-400 mb-4">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <h4 className="text-lg font-medium text-gray-900 mb-2">
-            {libraryType === 'private' ? '专属知识库为空' : '共享知识库为空'}
-          </h4>
-          <p className="text-gray-500 mb-4">
-            {libraryType === 'private' 
-              ? '您还没有上传任何个人文档' 
-              : '团队还没有共享任何文档'
-            }
-          </p>
-          <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-            {libraryType === 'private' ? '上传个人文档' : '添加共享文档'}
-          </button>
-        </div>
-      );
-    }
-
+    const actualLibraryType = libraryType === 'personal' ? 'private' : 'shared';
+    
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between mb-6">
-          <h4 className="text-lg font-medium text-gray-900">
-            {libraryType === 'private' ? '专属知识库' : '共享知识库'} ({libraryFiles.length} 个文档)
-          </h4>
-          <button
-            onClick={() => loadLibraryFiles(libraryType)}
-            className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            刷新
-          </button>
-        </div>
-        
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {libraryFiles.map((doc) => (
-            <div key={doc.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1 min-w-0">
-                  <h5 className="text-sm font-medium text-gray-900 truncate" title={doc.filename}>
-                    {doc.filename}
-                  </h5>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <span className="text-xs text-gray-500">
-                      {formatFileSize(doc.file_size)}
-                    </span>
-                    <span className="text-xs text-gray-400">•</span>
-                    <span className="text-xs text-gray-500 uppercase">
-                      {doc.file_type}
-                    </span>
-                  </div>
-                </div>
-                
-                {doc.domain && (
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    doc.domain === 'academic' ? 'bg-blue-100 text-blue-800' :
-                    doc.domain === 'medical' ? 'bg-red-100 text-red-800' :
-                    doc.domain === 'legal' ? 'bg-purple-100 text-purple-800' :
-                    doc.domain === 'technical' ? 'bg-green-100 text-green-800' :
-                    doc.domain === 'business' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {doc.domain === 'academic' ? '学术' :
-                     doc.domain === 'medical' ? '医学' :
-                     doc.domain === 'legal' ? '法律' :
-                     doc.domain === 'technical' ? '技术' :
-                     doc.domain === 'business' ? '商业' :
-                     '通用'}
-                  </span>
-                )}
+      <div className="flex flex-col h-full">
+        {/* 头部区域 */}
+        <div className="bg-white border-b border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                libraryType === 'personal' 
+                  ? 'bg-purple-100 text-purple-600' 
+                  : 'bg-green-100 text-green-600'
+              }`}>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {libraryType === 'personal' ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                  )}
+                </svg>
               </div>
-              
-              <div className="mb-3">
-                <p className="text-xs text-gray-500">
-                  上传时间: {formatDate(doc.upload_time)}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {libraryType === 'personal' ? '专属知识库' : '共享知识库'}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {libraryType === 'personal' 
+                    ? '管理您的个人专业文档资料' 
+                    : '访问团队共享的知识资源'
+                  }
                 </p>
-                {doc.tags && doc.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {doc.tags.slice(0, 2).map((tag, tagIndex) => (
-                      <span key={tagIndex} className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
-                        {tag}
-                      </span>
-                    ))}
-                    {doc.tags.length > 2 && (
-                      <span className="text-xs text-gray-400">+{doc.tags.length - 2}</span>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => handleOpenDocument(doc)}
-                  className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  打开文档
-                </button>
-                <button
-                  onClick={() => handleDownloadDocument(doc)}
-                  className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  下载
-                </button>
               </div>
             </div>
-          ))}
+            
+            {/* 新增知识库按钮 */}
+            <button 
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                libraryType === 'personal'
+                  ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                  : 'bg-green-600 hover:bg-green-700 text-white'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              <span>新增知识库</span>
+            </button>
+          </div>
+          
+          {/* 统计信息 */}
+          {!isLoadingLibrary && !libraryError && (
+            <div className="flex items-center space-x-6 text-sm text-gray-600">
+              <span>共 {libraryFiles.length} 个文档</span>
+              <span>•</span>
+              <span>
+                总大小 {libraryFiles.reduce((total, file) => total + file.file_size, 0) > 0 
+                  ? formatFileSize(libraryFiles.reduce((total, file) => total + file.file_size, 0))
+                  : '0 Bytes'
+                }
+              </span>
+              <button
+                onClick={() => loadLibraryFiles(actualLibraryType)}
+                className="text-blue-600 hover:text-blue-700 font-medium"
+              >
+                刷新
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 内容区域 */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {isLoadingLibrary ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className={`w-8 h-8 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4 ${
+                  libraryType === 'personal' ? 'border-purple-600' : 'border-green-600'
+                }`}></div>
+                <p className="text-gray-500">正在加载文档...</p>
+              </div>
+            </div>
+          ) : libraryError ? (
+            <div className="text-center py-12">
+              <div className="text-red-400 mb-4">
+                <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h4 className="text-lg font-medium text-gray-900 mb-2">加载失败</h4>
+              <p className="text-gray-500 mb-4">{libraryError}</p>
+              <button
+                onClick={() => loadLibraryFiles(actualLibraryType)}
+                className={`px-4 py-2 text-white rounded-lg transition-colors ${
+                  libraryType === 'personal' 
+                    ? 'bg-purple-600 hover:bg-purple-700' 
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                重试
+              </button>
+            </div>
+          ) : libraryFiles.length === 0 ? (
+            <div className="text-center py-12">
+              <div className={`mb-4 ${
+                libraryType === 'personal' ? 'text-purple-400' : 'text-green-400'
+              }`}>
+                <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h4 className="text-lg font-medium text-gray-900 mb-2">
+                {libraryType === 'personal' ? '专属知识库为空' : '共享知识库为空'}
+              </h4>
+              <p className="text-gray-500 mb-6">
+                {libraryType === 'personal' 
+                  ? '您还没有上传任何个人文档，点击上方"新增知识库"按钮开始添加' 
+                  : '团队还没有共享任何文档，点击上方"新增知识库"按钮开始添加'
+                }
+              </p>
+              <button 
+                className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                  libraryType === 'personal'
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+              >
+                {libraryType === 'personal' ? '上传个人文档' : '添加共享文档'}
+              </button>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {libraryFiles.map((doc) => (
+                <div key={doc.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h5 className="text-sm font-medium text-gray-900 truncate" title={doc.filename}>
+                        {doc.filename}
+                      </h5>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <span className="text-xs text-gray-500">
+                          {formatFileSize(doc.file_size)}
+                        </span>
+                        <span className="text-xs text-gray-400">•</span>
+                        <span className="text-xs text-gray-500 uppercase">
+                          {doc.file_type}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {doc.domain && (
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        doc.domain === 'academic' ? 'bg-blue-100 text-blue-800' :
+                        doc.domain === 'medical' ? 'bg-red-100 text-red-800' :
+                        doc.domain === 'legal' ? 'bg-purple-100 text-purple-800' :
+                        doc.domain === 'technical' ? 'bg-green-100 text-green-800' :
+                        doc.domain === 'business' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {doc.domain === 'academic' ? '学术' :
+                         doc.domain === 'medical' ? '医学' :
+                         doc.domain === 'legal' ? '法律' :
+                         doc.domain === 'technical' ? '技术' :
+                         doc.domain === 'business' ? '商业' :
+                         '通用'}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="mb-3">
+                    <p className="text-xs text-gray-500">
+                      上传时间: {formatDate(doc.upload_time)}
+                    </p>
+                    {doc.tags && doc.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {doc.tags.slice(0, 2).map((tag, tagIndex) => (
+                          <span key={tagIndex} className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
+                            {tag}
+                          </span>
+                        ))}
+                        {doc.tags.length > 2 && (
+                          <span className="text-xs text-gray-400">+{doc.tags.length - 2}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleOpenDocument(doc)}
+                      className={`flex-1 px-3 py-2 text-sm text-white rounded-lg transition-colors ${
+                        libraryType === 'personal' 
+                          ? 'bg-purple-600 hover:bg-purple-700' 
+                          : 'bg-green-600 hover:bg-green-700'
+                      }`}
+                    >
+                      打开文档
+                    </button>
+                    <button
+                      onClick={() => handleDownloadDocument(doc)}
+                      className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      下载
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );

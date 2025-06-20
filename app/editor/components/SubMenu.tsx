@@ -1,5 +1,22 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import mammoth from 'mammoth';
+
+interface FileMetadata {
+  id: string;
+  filename: string;
+  file_path: string;
+  file_size: number;
+  file_type: string;
+  upload_time: Date;
+  vector_id: string;
+  content_hash: string;
+  domain?: string;
+  tags?: string[];
+  ownership_type: 'private' | 'shared';
+  owner_id?: string;
+  created_at: Date;
+  updated_at: Date;
+}
 
 interface SubMenuProps {
   activeMenu: string;
@@ -11,6 +28,18 @@ interface SubMenuProps {
 export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, setUploadedDocument }: SubMenuProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // 知识库相关状态
+  const [expandedLibrary, setExpandedLibrary] = useState<'personal' | 'shared' | null>('shared'); // 默认展开共享知识库
+  const [libraryFiles, setLibraryFiles] = useState<{
+    personal: FileMetadata[];
+    shared: FileMetadata[];
+  }>({
+    personal: [],
+    shared: []
+  });
+  const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
 
   const menuConfig = {
     'ai-editor': [
@@ -51,24 +80,6 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         )
-      },
-      {
-        id: 'personal',
-        name: '专属知识库',
-        icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-        )
-      },
-      {
-        id: 'shared',
-        name: '共享知识库',
-        icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-          </svg>
-        )
       }
     ],
     'profile': [
@@ -95,6 +106,44 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
 
   const currentMenuItems = menuConfig[activeMenu as keyof typeof menuConfig] || [];
 
+  // 加载知识库文档
+  const loadLibraryFiles = async (libraryType: 'personal' | 'shared') => {
+    setIsLoadingLibrary(true);
+    setLibraryError(null);
+    
+    try {
+      const params = new URLSearchParams({
+        action: 'getLibraryFiles',
+        libraryType: libraryType === 'personal' ? 'private' : 'shared',
+        ownerId: 'default_user'
+      });
+      
+      const response = await fetch(`/api/knowledge-base?${params}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setLibraryFiles(prev => ({
+          ...prev,
+          [libraryType]: data.files || []
+        }));
+      } else {
+        setLibraryError(data.error || '加载失败');
+      }
+    } catch (error) {
+      console.error('加载知识库文档失败:', error);
+      setLibraryError('网络请求失败');
+    } finally {
+      setIsLoadingLibrary(false);
+    }
+  };
+
+  // 初始化时加载共享知识库
+  useEffect(() => {
+    if (activeMenu === 'knowledge-base') {
+      loadLibraryFiles('shared');
+    }
+  }, [activeMenu]);
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -106,7 +155,6 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
 
         switch (fileExtension) {
           case 'docx':
-            // 处理 .docx 文件
             const arrayBuffer = await file.arrayBuffer();
             const result = await mammoth.extractRawText({ arrayBuffer });
             content = result.value;
@@ -116,13 +164,11 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
             break;
 
           case 'doc':
-            // .doc 文件需要特殊处理，暂时提示用户转换为 .docx
             alert('暂不支持 .doc 格式，请将文档另存为 .docx 格式后重新上传');
             setIsProcessing(false);
             return;
 
           case 'txt':
-            // 处理纯文本文件
             content = await file.text();
             break;
 
@@ -138,7 +184,6 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
           return;
         }
 
-        // 成功处理文档
         setUploadedDocument(content);
         setActiveSubMenu('rag-editor');
         
@@ -159,9 +204,43 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
     }
   };
 
-  const handleKnowledgeUpload = (type: 'personal' | 'shared') => {
-    // 这里可以添加知识库文档上传逻辑
-    fileInputRef.current?.click();
+  // 处理知识库按钮点击
+  const handleLibraryClick = (libraryType: 'personal' | 'shared') => {
+    if (expandedLibrary === libraryType) {
+      // 如果已经展开，则收起
+      setExpandedLibrary(null);
+      setActiveSubMenu('search'); // 回到搜索页面
+    } else {
+      // 展开对应的知识库
+      setExpandedLibrary(libraryType);
+      setActiveSubMenu(libraryType);
+      
+      // 如果还没有加载过数据，则加载
+      if (libraryFiles[libraryType].length === 0) {
+        loadLibraryFiles(libraryType);
+      }
+    }
+  };
+
+  // 格式化文件大小
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // 格式化日期
+  const formatDate = (date: Date | string): string => {
+    const d = new Date(date);
+    return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  };
+
+  // 打开文档
+  const handleOpenDocument = (document: FileMetadata) => {
+    const url = `/api/documents/${document.vector_id}?action=open`;
+    window.open(url, '_blank');
   };
 
   return (
@@ -181,15 +260,14 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
       </div>
 
       {/* Menu Items */}
-      <div className="flex-1 p-4 space-y-1">
-        {currentMenuItems.map((item) => (
+      <div className="flex-1 p-4 space-y-1 overflow-y-auto">
+        {/* 非知识库菜单项 */}
+        {activeMenu !== 'knowledge-base' && currentMenuItems.map((item) => (
           <button
             key={item.id}
             onClick={() => {
               if (item.id === 'upload') {
                 handleUploadClick();
-              } else if (item.id === 'personal' || item.id === 'shared') {
-                setActiveSubMenu(item.id);
               } else {
                 setActiveSubMenu(item.id);
               }
@@ -207,67 +285,161 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
           </button>
         ))}
 
-        {/* 知识库特殊功能 */}
-        {activeMenu === 'knowledge-base' && (activeSubMenu === 'personal' || activeSubMenu === 'shared') && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-xl">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-gray-900">
-                {activeSubMenu === 'personal' ? '专属文档' : '共享文档'}
-              </h3>
-              <button
-                onClick={() => handleKnowledgeUpload(activeSubMenu as 'personal' | 'shared')}
-                className="flex items-center space-x-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors duration-200"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+        {/* 知识库特殊菜单 */}
+        {activeMenu === 'knowledge-base' && (
+          <>
+            {/* 搜索知识库按钮 */}
+            <button
+              onClick={() => {
+                setActiveSubMenu('search');
+                setExpandedLibrary(null);
+              }}
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 ${
+                activeSubMenu === 'search'
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
+                  : 'text-gray-700 hover:bg-gray-50 hover:shadow-sm'
+              }`}
+            >
+              <span className={`${activeSubMenu === 'search' ? 'text-blue-600' : 'text-gray-400'} transition-colors duration-200`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <span>新增知识库</span>
+              </span>
+              <span className="font-medium">搜索知识库</span>
+            </button>
+
+            {/* 专属知识库按钮 */}
+            <div className="space-y-1">
+              <button
+                onClick={() => handleLibraryClick('personal')}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left transition-all duration-200 ${
+                  expandedLibrary === 'personal'
+                    ? 'bg-purple-50 text-purple-700 border border-purple-200 shadow-sm'
+                    : 'text-gray-700 hover:bg-gray-50 hover:shadow-sm'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <span className={`${expandedLibrary === 'personal' ? 'text-purple-600' : 'text-gray-400'} transition-colors duration-200`}>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </span>
+                  <span className="font-medium">专属知识库</span>
+                </div>
+                <svg 
+                  className={`w-4 h-4 transition-transform duration-200 ${expandedLibrary === 'personal' ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
+
+              {/* 专属知识库文档列表 */}
+              {expandedLibrary === 'personal' && (
+                <div className="ml-4 pl-4 border-l-2 border-purple-100 space-y-2">
+                  {isLoadingLibrary ? (
+                    <div className="flex items-center space-x-2 py-2 text-sm text-gray-500">
+                      <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span>加载中...</span>
+                    </div>
+                  ) : libraryFiles.personal.length === 0 ? (
+                    <div className="py-2 text-sm text-gray-500">暂无文档</div>
+                  ) : (
+                    libraryFiles.personal.slice(0, 3).map((doc) => (
+                      <button
+                        key={doc.id}
+                        onClick={() => handleOpenDocument(doc)}
+                        className="w-full flex items-center space-x-3 p-2 rounded-lg hover:bg-purple-50 transition-colors text-left"
+                      >
+                        <div className="w-6 h-6 bg-purple-100 rounded flex items-center justify-center flex-shrink-0">
+                          <svg className="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-900 truncate">{doc.filename}</p>
+                          <p className="text-xs text-gray-500">{formatFileSize(doc.file_size)} • {formatDate(doc.upload_time)}</p>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                  {libraryFiles.personal.length > 3 && (
+                    <div className="text-xs text-gray-500 py-1">
+                      还有 {libraryFiles.personal.length - 3} 个文档...
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            
-            {/* 文档列表 */}
-            <div className="space-y-2">
-              <div className="flex items-center space-x-3 p-2 bg-white rounded-lg border border-gray-200">
-                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
+
+            {/* 共享知识库按钮 */}
+            <div className="space-y-1">
+              <button
+                onClick={() => handleLibraryClick('shared')}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left transition-all duration-200 ${
+                  expandedLibrary === 'shared'
+                    ? 'bg-green-50 text-green-700 border border-green-200 shadow-sm'
+                    : 'text-gray-700 hover:bg-gray-50 hover:shadow-sm'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <span className={`${expandedLibrary === 'shared' ? 'text-green-600' : 'text-gray-400'} transition-colors duration-200`}>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                    </svg>
+                  </span>
+                  <span className="font-medium">共享知识库</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">学术论文.docx</p>
-                  <p className="text-xs text-gray-500">2024-01-15 14:30</p>
+                <svg 
+                  className={`w-4 h-4 transition-transform duration-200 ${expandedLibrary === 'shared' ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* 共享知识库文档列表 */}
+              {expandedLibrary === 'shared' && (
+                <div className="ml-4 pl-4 border-l-2 border-green-100 space-y-2">
+                  {isLoadingLibrary ? (
+                    <div className="flex items-center space-x-2 py-2 text-sm text-gray-500">
+                      <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span>加载中...</span>
+                    </div>
+                  ) : libraryFiles.shared.length === 0 ? (
+                    <div className="py-2 text-sm text-gray-500">暂无文档</div>
+                  ) : (
+                    libraryFiles.shared.slice(0, 3).map((doc) => (
+                      <button
+                        key={doc.id}
+                        onClick={() => handleOpenDocument(doc)}
+                        className="w-full flex items-center space-x-3 p-2 rounded-lg hover:bg-green-50 transition-colors text-left"
+                      >
+                        <div className="w-6 h-6 bg-green-100 rounded flex items-center justify-center flex-shrink-0">
+                          <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-900 truncate">{doc.filename}</p>
+                          <p className="text-xs text-gray-500">{formatFileSize(doc.file_size)} • {formatDate(doc.upload_time)}</p>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                  {libraryFiles.shared.length > 3 && (
+                    <div className="text-xs text-gray-500 py-1">
+                      还有 {libraryFiles.shared.length - 3} 个文档...
+                    </div>
+                  )}
                 </div>
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">已处理</span>
-              </div>
-              
-              <div className="flex items-center space-x-3 p-2 bg-white rounded-lg border border-gray-200">
-                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">技术报告.pdf</p>
-                  <p className="text-xs text-gray-500">2024-01-14 09:15</p>
-                </div>
-                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">处理中</span>
-              </div>
+              )}
             </div>
-            
-            {/* 分页 */}
-            <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-200">
-              <span className="text-xs text-gray-500">共 2 个文档</span>
-              <div className="flex space-x-1">
-                <button className="w-6 h-6 text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50" disabled>
-                  ‹
-                </button>
-                <button className="w-6 h-6 text-xs bg-blue-600 text-white rounded">1</button>
-                <button className="w-6 h-6 text-xs text-gray-400 hover:text-gray-600">
-                  ›
-                </button>
-              </div>
-            </div>
-          </div>
+          </>
         )}
       </div>
 
