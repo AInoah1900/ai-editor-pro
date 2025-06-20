@@ -12,7 +12,7 @@ export default function Home() {
     {
       icon: (
         <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       ),
       title: "智能校对系统",
@@ -26,9 +26,9 @@ export default function Home() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
         </svg>
       ),
-      title: "内容优化服务",
-      description: "提供多种写作风格润色，智能分析可读性，确保期刊文章风格统一和学术规范。",
-      features: ["学术风格润色", "可读性分析", "语言风格统一", "引用格式规范"],
+      title: "AI增强编辑",
+      description: "基于DeepSeek大模型的智能编辑服务，结合知识库上下文提供精准的内容优化和专业建议。",
+      features: ["智能内容纠错", "专业术语校验", "语言风格优化", "学术规范检查"],
       gradient: "bg-gradient-to-br from-purple-50 to-pink-50"
     },
     {

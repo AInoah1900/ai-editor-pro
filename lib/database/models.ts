@@ -70,6 +70,7 @@ export interface KnowledgeItem {
   vector_id: string;
   created_at: Date;
   updated_at: Date;
+  relevance_score?: number; // 用于搜索结果的相关度评分
 }
 
 /**
@@ -368,6 +369,106 @@ export class DatabaseModels {
     } catch (error) {
       console.error('删除文件元数据失败:', error);
       throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 根据领域获取相关文档
+   */
+  async getFilesByDomain(domain: string): Promise<FileMetadata[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM file_metadata 
+        WHERE domain = $1 
+        ORDER BY upload_time DESC
+      `, [domain]);
+
+      return result.rows as FileMetadata[];
+    } catch (error) {
+      console.error('获取领域文档失败:', error);
+      return [];
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 根据向量ID获取文件元数据
+   */
+  async getFileByVectorId(vectorId: string): Promise<FileMetadata | null> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM file_metadata WHERE vector_id = $1
+      `, [vectorId]);
+
+      if (result.rows.length > 0) {
+        return result.rows[0] as FileMetadata;
+      }
+      return null;
+    } catch (error) {
+      console.error('获取文件元数据失败:', error);
+      return null;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 搜索相关文档 (基于关键词和领域)
+   */
+  async searchRelatedFiles(query: string, domain?: string, limit: number = 10): Promise<FileMetadata[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      let sql = `
+        SELECT * FROM file_metadata 
+        WHERE (filename ILIKE $1 OR tags && ARRAY[$2])
+      `;
+      const params: any[] = [`%${query}%`, query];
+      
+      if (domain) {
+        sql += ` AND domain = $3`;
+        params.push(domain);
+        sql += ` ORDER BY upload_time DESC LIMIT $4`;
+        params.push(limit);
+      } else {
+        sql += ` ORDER BY upload_time DESC LIMIT $3`;
+        params.push(limit);
+      }
+
+      const result = await client.query(sql, params);
+      return result.rows as FileMetadata[];
+    } catch (error) {
+      console.error('搜索相关文档失败:', error);
+      return [];
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 获取所有文档
+   */
+  async getAllFiles(limit: number = 50): Promise<FileMetadata[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM file_metadata 
+        ORDER BY upload_time DESC 
+        LIMIT $1
+      `, [limit]);
+
+      return result.rows as FileMetadata[];
+    } catch (error) {
+      console.error('获取所有文档失败:', error);
+      return [];
     } finally {
       client.release();
     }

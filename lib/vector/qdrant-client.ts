@@ -143,12 +143,36 @@ export class QdrantVectorClient {
       // 确保集合存在
       await this.initializeCollection();
       
-      const searchResponse = await this.client.search(this.COLLECTION_NAME, {
+      // 验证向量维度
+      if (queryVector.length !== this.VECTOR_SIZE) {
+        console.error(`向量维度不匹配: 期望${this.VECTOR_SIZE}，实际${queryVector.length}`);
+        return [];
+      }
+      
+      // 检查集合是否有数据
+      const collectionInfo = await this.getCollectionInfo();
+      if (collectionInfo.points_count === 0) {
+        console.warn('向量集合为空，无法搜索');
+        return [];
+      }
+      
+      console.log(`正在搜索相似向量: 维度=${queryVector.length}, 限制=${limit}, 数据点=${collectionInfo.points_count}`);
+      
+      // 构建搜索参数
+      const searchParams: any = {
         vector: queryVector,
         limit: limit,
-        filter: filter,
         with_payload: true,
-      });
+      };
+      
+      // 只有在filter有值时才添加
+      if (filter && Object.keys(filter).length > 0) {
+        searchParams.filter = filter;
+      }
+      
+      const searchResponse = await this.client.search(this.COLLECTION_NAME, searchParams);
+
+      console.log(`搜索完成，找到 ${searchResponse.length} 个结果`);
 
       return searchResponse.map((result) => ({
         id: (result.payload?.original_id as string) || String(result.id), // 返回原始 ID
@@ -157,6 +181,14 @@ export class QdrantVectorClient {
       }));
     } catch (error) {
       console.error('搜索相似向量失败:', error);
+      if (error instanceof Error) {
+        console.error('错误详情:', error.message);
+      }
+      if (error && typeof error === 'object' && 'response' in error) {
+        const httpError = error as any;
+        console.error('响应状态:', httpError.response?.status);
+        console.error('响应数据:', httpError.response?.data);
+      }
       return [];
     }
   }

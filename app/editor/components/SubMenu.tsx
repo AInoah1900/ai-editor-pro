@@ -140,7 +140,7 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
 
         // 成功处理文档
         setUploadedDocument(content);
-        setActiveSubMenu('editor');
+        setActiveSubMenu('rag-editor');
         
       } catch (error) {
         console.error('文件处理错误:', error);

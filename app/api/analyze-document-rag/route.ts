@@ -87,7 +87,12 @@ export async function POST(request: NextRequest) {
         const { createDeepSeekClient } = await import('@/lib/deepseek/deepseek-client');
         const deepSeekClient = createDeepSeekClient(DEEPSEEK_API_KEY);
         
-        const response = await deepSeekClient.createChatCompletion({
+        // 设置超时控制
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('DeepSeek API调用超时')), 60000); // 60秒超时
+        });
+
+        const apiPromise = deepSeekClient.createChatCompletion({
           model: 'deepseek-chat',
           messages: [
             {
@@ -111,15 +116,47 @@ ${formatKnowledge(relevantKnowledge)}
             }
           ],
           temperature: 0.1,
-          max_tokens: 4000,
+          max_tokens: 3000, // 减少token数量，提高响应速度
           stream: false
         });
+
+        const response = await Promise.race([apiPromise, timeoutPromise]) as any;
 
         const aiResponse = response.choices[0]?.message?.content;
           
         if (aiResponse) {
+          try {
+            // 清理响应，移除可能的markdown格式
             const cleanedResponse = aiResponse.replace(/```json\n?|\n?```/g, '').trim();
-            const parsedResult = JSON.parse(cleanedResponse);
+            
+            // 检查响应是否为空或不完整
+            if (!cleanedResponse || cleanedResponse.length < 10) {
+              throw new Error('API响应为空或过短');
+            }
+            
+            // 尝试修复不完整的JSON
+            let jsonToProcess = cleanedResponse;
+            
+            // 如果JSON不完整，尝试补全
+            if (!jsonToProcess.endsWith('}') && !jsonToProcess.endsWith(']')) {
+              console.warn('检测到不完整的JSON响应，尝试修复...');
+              
+              // 简单的JSON修复逻辑
+              const openBraces = (jsonToProcess.match(/\{/g) || []).length;
+              const closeBraces = (jsonToProcess.match(/\}/g) || []).length;
+              const openBrackets = (jsonToProcess.match(/\[/g) || []).length;
+              const closeBrackets = (jsonToProcess.match(/\]/g) || []).length;
+              
+              // 补全缺失的括号
+              for (let i = 0; i < openBrackets - closeBrackets; i++) {
+                jsonToProcess += ']';
+              }
+              for (let i = 0; i < openBraces - closeBraces; i++) {
+                jsonToProcess += '}';
+              }
+            }
+            
+            const parsedResult = JSON.parse(jsonToProcess);
             
             if (parsedResult.errors && Array.isArray(parsedResult.errors)) {
               const enhancedErrors = parsedResult.errors.map((error: {
@@ -155,7 +192,15 @@ ${formatKnowledge(relevantKnowledge)}
               // 6. 学习用户交互（这里可以在用户操作后调用）
               console.log('RAG增强分析完成');
               return NextResponse.json(ragResult);
+            } else {
+              console.warn('DeepSeek API返回的结果格式不正确:', parsedResult);
+              throw new Error('API返回格式不正确');
             }
+          } catch (jsonError) {
+            console.error('JSON解析错误:', jsonError);
+            console.error('原始响应:', aiResponse);
+            throw new Error('JSON解析失败');
+          }
         }
         
         console.warn('DeepSeek API调用失败，降级到本地RAG分析');
@@ -234,22 +279,27 @@ ${content}
 领域信息：${domainInfo.domain} (置信度: ${domainInfo.confidence})
 关键词：${domainInfo.keywords.join(', ')}${knowledgeContext}
 
-请返回JSON格式的结果，包含以下字段：
+请严格按照以下JSON格式返回结果，不要添加任何其他文本或说明：
+
 {
   "errors": [
     {
-      "id": "错误ID",
-      "type": "error|warning|suggestion",
-      "position": {"start": 开始位置, "end": 结束位置},
+      "id": "error_1",
+      "type": "error",
+      "position": {"start": 0, "end": 5},
       "original": "原始文本",
       "suggestion": "建议修改",
       "reason": "修改原因",
-      "category": "错误类别"
+      "category": "语法错误"
     }
   ]
 }
 
-请确保JSON格式正确，不要包含其他文本。`;
+重要要求：
+1. 只返回JSON，不要包含任何markdown标记
+2. 确保JSON格式完整和正确
+3. 如果没有发现错误，返回空数组：{"errors": []}
+4. 每个错误必须包含所有必需字段`;
 }
 
 /**

@@ -5,10 +5,70 @@ import { NewKnowledgeRetriever } from '@/lib/rag/new-knowledge-retriever';
  * 知识库管理API - 使用新的 Qdrant + PostgreSQL 方案
  */
 
-// GET: 获取知识库统计信息
-export async function GET() {
+// GET: 获取知识库统计信息或搜索知识库
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const query = searchParams.get('query');
+    
     const retriever = new NewKnowledgeRetriever();
+    
+    // 如果有查询参数，执行搜索
+    if (query) {
+      const domain = searchParams.get('domain') || undefined;
+      const type = searchParams.get('type') || undefined;
+      const limit = parseInt(searchParams.get('limit') || '10');
+      const includeDocuments = searchParams.get('includeDocuments') === 'true';
+      
+      console.log('执行知识库搜索:', { query, domain, type, limit, includeDocuments });
+      
+      if (includeDocuments) {
+        // 综合搜索：返回知识项和相关文档
+        const searchResults = await retriever.comprehensiveSearch(
+          query,
+          domain,
+          type,
+          limit,
+          limit
+        );
+        
+        return NextResponse.json({
+          success: true,
+          data: {
+            knowledge: searchResults.knowledge,
+            documents: searchResults.documents
+          },
+          query: {
+            text: query,
+            domain,
+            type,
+            limit,
+            includeDocuments
+          }
+        });
+      } else {
+        // 只返回知识项
+        const searchResults = await retriever.retrieveRelevantKnowledge(
+          query,
+          domain,
+          type,
+          limit
+        );
+        
+        return NextResponse.json({
+          success: true,
+          data: searchResults,
+          query: {
+            text: query,
+            domain,
+            type,
+            limit
+          }
+        });
+      }
+    }
+    
+    // 否则返回统计信息
     const stats = await retriever.getKnowledgeStats();
     
     return NextResponse.json({
@@ -16,10 +76,10 @@ export async function GET() {
       data: stats
     });
   } catch (error) {
-    console.error('获取知识库统计失败:', error);
+    console.error('知识库操作失败:', error);
     return NextResponse.json({
       success: false,
-      error: '获取知识库统计失败'
+      error: error instanceof Error ? error.message : '知识库操作失败'
     }, { status: 500 });
   }
 }
