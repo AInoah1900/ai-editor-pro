@@ -108,7 +108,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
             reason?: string;
             category?: string;
           }, index: number) => ({
-            id: error.id || `error_${Date.now()}_${index}`,
+            id: `${error.id || 'error'}_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
             type: (error.type as 'error' | 'warning' | 'suggestion') || 'warning',
             position: error.position || { start: index * 10, end: index * 10 + 5 },
             original: error.original || '未知错误',

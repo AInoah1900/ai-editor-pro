@@ -237,10 +237,32 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
     return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   };
 
-  // 打开文档
-  const handleOpenDocument = (document: FileMetadata) => {
-    const url = `/api/documents/${document.vector_id}?action=open`;
-    window.open(url, '_blank');
+  // 在工作区内打开文档
+  const handleOpenDocument = async (document: FileMetadata) => {
+    try {
+      const response = await fetch(`/api/documents/${document.vector_id}?action=open`);
+      if (response.ok) {
+        const content = await response.text();
+        setUploadedDocument(content);
+        
+        // 根据文档类型决定打开方式
+        if (document.ownership_type === 'private') {
+          setActiveSubMenu('rag-editor'); // 专属知识库使用AI编辑器
+        } else {
+          setActiveSubMenu('document-viewer'); // 共享知识库使用文档查看器
+        }
+      } else {
+        // 处理文档不存在的情况
+        const errorData = await response.json();
+        console.error('获取文档内容失败:', errorData);
+        
+        // 显示友好的错误提示
+        alert(`无法打开文档 "${document.filename}"\n原因: ${errorData.error || '文档不存在'}\n\n请联系管理员或重新上传此文档。`);
+      }
+    } catch (error) {
+      console.error('打开文档失败:', error);
+      alert(`打开文档失败: ${error instanceof Error ? error.message : '网络错误'}`);
+    }
   };
 
   return (

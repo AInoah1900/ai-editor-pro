@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseModels } from '@/lib/database/models';
 import { NewKnowledgeRetriever } from '@/lib/rag/new-knowledge-retriever';
+import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
 /**
  * 知识库管理API - 使用新的 Qdrant + PostgreSQL 方案
@@ -94,9 +98,17 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: 添加知识项或初始化知识库
+// POST: 添加知识项、初始化知识库或上传文件
 export async function POST(request: NextRequest) {
   try {
+    // 检查是否是文件上传请求
+    const contentType = request.headers.get('content-type');
+    
+    if (contentType?.includes('multipart/form-data')) {
+      // 处理文件上传
+      return await handleFileUpload(request);
+    }
+    
     const body = await request.json();
     const { action, knowledge } = body;
     
@@ -208,4 +220,118 @@ export async function DELETE(request: NextRequest) {
       error: '删除知识项失败'
     }, { status: 500 });
   }
+}
+
+/**
+ * 处理文件上传
+ */
+async function handleFileUpload(request: NextRequest): Promise<NextResponse> {
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    const libraryType = formData.get('libraryType') as string; // 'private' | 'shared'
+    const ownerId = formData.get('ownerId') as string || 'default_user';
+    
+    if (!file) {
+      return NextResponse.json({
+        success: false,
+        error: '没有找到上传的文件'
+      }, { status: 400 });
+    }
+    
+    if (!libraryType || !['private', 'shared'].includes(libraryType)) {
+      return NextResponse.json({
+        success: false,
+        error: '请指定有效的知识库类型 (private 或 shared)'
+      }, { status: 400 });
+    }
+    
+    // 检查文件类型
+    const allowedTypes = ['txt', 'md', 'pdf', 'doc', 'docx'];
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    
+    if (!fileExtension || !allowedTypes.includes(fileExtension)) {
+      return NextResponse.json({
+        success: false,
+        error: '不支持的文件类型。支持的格式: ' + allowedTypes.join(', ')
+      }, { status: 400 });
+    }
+    
+    // 创建存储目录
+    const uploadDir = path.join(process.cwd(), 'uploads', libraryType);
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
+    // 生成唯一文件名
+    const fileId = uuidv4();
+    const fileName = `${fileId}_${file.name}`;
+    const filePath = path.join(uploadDir, fileName);
+    
+    // 保存文件
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(filePath, buffer);
+    
+    // 生成文件内容摘要（用于向量化）
+    // let content = '';
+    // if (fileExtension === 'txt' || fileExtension === 'md') {
+    //   content = buffer.toString('utf-8').substring(0, 1000); // 取前1000字符作为摘要
+    // } else {
+    //   content = `${file.name} - ${fileExtension.toUpperCase()}文档`;
+    // }
+    
+    // 创建文件元数据
+    const vectorId = `vector_${libraryType}_${fileId}`;
+    const fileMetadata = {
+      id: fileId,
+      filename: file.name,
+      file_path: filePath,
+      file_size: file.size,
+      file_type: fileExtension,
+      upload_time: new Date(),
+      vector_id: vectorId,
+      content_hash: generateContentHash(buffer),
+      domain: 'general', // 默认领域，可以后续通过AI分析优化
+      tags: [],
+      ownership_type: libraryType as 'private' | 'shared',
+      owner_id: libraryType === 'private' ? ownerId : undefined,
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+    
+    // 保存到数据库
+    const dbModels = new DatabaseModels();
+    await dbModels.addFileMetadata(fileMetadata);
+    
+    // 生成向量并存储到Qdrant (暂时跳过向量化，后续可以添加)
+    // const retriever = new NewKnowledgeRetriever();
+    // TODO: 实现文档向量化功能
+    
+    return NextResponse.json({
+      success: true,
+      message: '文件上传成功',
+      file: {
+        id: fileId,
+        filename: file.name,
+        size: file.size,
+        type: fileExtension,
+        libraryType,
+      }
+    });
+    
+  } catch (error) {
+    console.error('文件上传失败:', error);
+    return NextResponse.json({
+      success: false,
+      error: '文件上传失败: ' + (error instanceof Error ? error.message : '未知错误')
+    }, { status: 500 });
+  }
+}
+
+/**
+ * 生成内容哈希
+ */
+function generateContentHash(buffer: Buffer): string {
+  return crypto.createHash('md5').update(buffer).digest('hex');
 } 

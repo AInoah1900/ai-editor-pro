@@ -61,6 +61,10 @@ export default function WorkArea({
   const [libraryFiles, setLibraryFiles] = useState<FileMetadata[]>([]);
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
   const [libraryError, setLibraryError] = useState<string | null>(null);
+  
+  // 文件上传相关状态
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // 加载知识库文档列表
   const loadLibraryFiles = async (libraryType: 'private' | 'shared') => {
@@ -101,6 +105,71 @@ export default function WorkArea({
     }
   }, [activeSubMenu]);
 
+  // 处理文件上传到知识库
+  const handleKnowledgeFileUpload = async (file: File, libraryType: 'private' | 'shared') => {
+    setIsUploading(true);
+    setUploadProgress(0);
+    
+    try {
+      // 模拟上传进度
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+
+      // 创建FormData
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('libraryType', libraryType);
+      formData.append('ownerId', 'default_user');
+      
+      // 调用上传API
+      const response = await fetch('/api/knowledge-base', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const result = await response.json();
+      
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      
+      if (result.success) {
+        // 上传成功后重新加载文档列表
+        await loadLibraryFiles(libraryType);
+        alert('文档上传成功！');
+      } else {
+        throw new Error(result.error || '上传失败');
+      }
+      
+    } catch (error) {
+      console.error('文档上传失败:', error);
+      alert('文档上传失败: ' + (error instanceof Error ? error.message : '请重试'));
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  // 触发文件选择
+  const triggerFileUpload = (libraryType: 'private' | 'shared') => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.doc,.docx,.txt,.md';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        handleKnowledgeFileUpload(file, libraryType);
+      }
+    };
+    input.click();
+  };
+
   // 渲染知识库文档列表
   const renderLibraryDocuments = (libraryType: 'private' | 'shared') => {
     const actualLibraryType = libraryType === 'personal' ? 'private' : 'shared';
@@ -139,21 +208,42 @@ export default function WorkArea({
             
             {/* 新增知识库按钮 */}
             <button 
+              onClick={() => triggerFileUpload(actualLibraryType)}
+              disabled={isUploading}
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                 libraryType === 'personal'
-                  ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                  : 'bg-green-600 hover:bg-green-700 text-white'
+                  ? 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-purple-400'
+                  : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-green-400'
               }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              <span>新增知识库</span>
+              {isUploading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+              )}
+              <span>{isUploading ? '上传中...' : '新增知识库'}</span>
             </button>
           </div>
           
-          {/* 统计信息 */}
-          {!isLoadingLibrary && !libraryError && (
+          {/* 统计信息和上传进度 */}
+          {isUploading ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm text-gray-600">
+                <span>正在上传文档...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all duration-300 ${
+                    libraryType === 'personal' ? 'bg-purple-600' : 'bg-green-600'
+                  }`}
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          ) : !isLoadingLibrary && !libraryError && (
             <div className="flex items-center space-x-6 text-sm text-gray-600">
               <span>共 {libraryFiles.length} 个文档</span>
               <span>•</span>
@@ -223,13 +313,15 @@ export default function WorkArea({
                 }
               </p>
               <button 
+                onClick={() => triggerFileUpload(actualLibraryType)}
+                disabled={isUploading}
                 className={`px-6 py-3 rounded-lg font-medium transition-colors ${
                   libraryType === 'personal'
-                    ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                    : 'bg-green-600 hover:bg-green-700 text-white'
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-purple-400'
+                    : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-green-400'
                 }`}
               >
-                {libraryType === 'personal' ? '上传个人文档' : '添加共享文档'}
+                {isUploading ? '上传中...' : (libraryType === 'personal' ? '上传个人文档' : '添加共享文档')}
               </button>
             </div>
           ) : (
@@ -291,14 +383,14 @@ export default function WorkArea({
                   
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => handleOpenDocument(doc)}
+                      onClick={() => handleOpenDocument(doc, libraryType === 'personal' ? 'edit' : 'view')}
                       className={`flex-1 px-3 py-2 text-sm text-white rounded-lg transition-colors ${
                         libraryType === 'personal' 
                           ? 'bg-purple-600 hover:bg-purple-700' 
                           : 'bg-green-600 hover:bg-green-700'
                       }`}
                     >
-                      打开文档
+                      {libraryType === 'personal' ? 'AI编辑' : '查看文档'}
                     </button>
                     <button
                       onClick={() => handleDownloadDocument(doc)}
@@ -378,10 +470,51 @@ export default function WorkArea({
     setSelectedType('');
   };
 
-  // 打开文档
-  const handleOpenDocument = (document: FileMetadata) => {
-    const url = `/api/documents/${document.vector_id}?action=open`;
-    window.open(url, '_blank');
+  // 在工作区内打开文档
+  const handleOpenDocument = async (document: FileMetadata, mode: 'edit' | 'view' = 'edit') => {
+    try {
+      const response = await fetch(`/api/documents/${document.vector_id}?action=open`);
+      
+      if (response.ok) {
+        const content = await response.text();
+        setUploadedDocument(content);
+        
+        // 根据模式决定跳转到哪个子菜单
+        if (mode === 'edit') {
+          setActiveSubMenu('rag-editor'); // 编辑模式，使用AI增强编辑器
+        } else {
+          setActiveSubMenu('document-viewer'); // 查看模式，简单文档查看器
+        }
+      } else {
+        // 处理文档不存在的情况
+        const errorData = await response.json();
+        console.error('获取文档内容失败:', errorData);
+        
+        // 显示友好的错误提示
+        alert(`无法打开文档 "${document.filename}"\n原因: ${errorData.error || '文档不存在'}\n\n请联系管理员或重新上传此文档。`);
+        
+        // 可选：从列表中移除不存在的文档
+        if (confirm('是否从知识库中移除此无效文档？')) {
+          await removeInvalidDocument(document);
+        }
+      }
+    } catch (error) {
+      console.error('打开文档失败:', error);
+      alert(`打开文档失败: ${error instanceof Error ? error.message : '网络错误'}`);
+    }
+  };
+
+  // 移除无效文档
+  const removeInvalidDocument = async (document: FileMetadata) => {
+    try {
+      // 这里可以调用删除API，暂时只是重新加载列表
+      const libraryType = document.ownership_type === 'private' ? 'private' : 'shared';
+      await loadLibraryFiles(libraryType);
+      alert('文档已从列表中移除');
+    } catch (error) {
+      console.error('移除文档失败:', error);
+      alert('移除文档失败，请手动刷新页面');
+    }
   };
 
   // 下载文档
@@ -444,6 +577,64 @@ export default function WorkArea({
                 className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 上传文档
+              </button>
+            </div>
+          </div>
+        );
+
+      case 'document-viewer':
+        return uploadedDocument ? (
+          <div className="flex flex-col h-full">
+            {/* 文档查看器头部 */}
+            <div className="bg-white border-b border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">文档查看器</h3>
+                    <p className="text-sm text-gray-500">共享知识库文档 - 只读模式</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveSubMenu('shared')}
+                  className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  返回列表
+                </button>
+              </div>
+            </div>
+            
+            {/* 文档内容 */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <div className="p-6">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed font-sans">
+                      {uploadedDocument}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="text-gray-400 mb-4">
+                <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <p className="text-gray-500 mb-4">请选择文档进行查看</p>
+              <button
+                onClick={() => setActiveSubMenu('shared')}
+                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                返回共享知识库
               </button>
             </div>
           </div>

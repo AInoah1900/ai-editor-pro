@@ -84,8 +84,12 @@ ${content}
 
     // 使用新的DeepSeek客户端
     const { createDeepSeekClient } = await import('@/lib/deepseek/deepseek-client');
-    const deepSeekClient = createDeepSeekClient(DEEPSEEK_API_KEY);
+    const deepSeekClient = createDeepSeekClient(DEEPSEEK_API_KEY, {
+      timeout: 20000, // 20秒超时
+      maxRetries: 2   // 减少重试次数
+    });
     
+    console.log('正在调用DeepSeek API进行基础分析...');
     const response = await deepSeekClient.createChatCompletion({
       model: 'deepseek-chat',
       messages: [
@@ -124,7 +128,7 @@ ${content}
           const position = calculateErrorPosition(content, error.original || '', index);
           
           return {
-            id: error.id || `ai_error_${Date.now()}_${index}`,
+            id: `ai_error_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
             type: error.type || 'warning',
             position: error.position || position,
             original: error.original || '未知错误',
@@ -152,7 +156,19 @@ ${content}
     }
 
   } catch (error) {
-    console.error('API调用失败:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('基础API调用失败:', errorMessage);
+    
+    // 根据错误类型提供更详细的日志
+    if (errorMessage.includes('timeout') || errorMessage.includes('超时')) {
+      console.log('📡 DeepSeek API超时，使用本地分析');
+    } else if (errorMessage.includes('401') || errorMessage.includes('403')) {
+      console.log('🔑 API密钥验证失败，使用本地分析');
+    } else if (errorMessage.includes('429')) {
+      console.log('⚡ API调用频率超限，使用本地分析');
+    } else {
+      console.log('🔧 API调用异常，使用本地分析');
+    }
     
     // 获取请求内容用于备选数据生成
     let fallbackContent = '';
@@ -163,9 +179,14 @@ ${content}
       fallbackContent = '';
     }
     
+    console.log(`🔄 使用本地分析处理文档 (${fallbackContent.length} 字符)`);
+    const fallbackErrors = generateFallbackErrors(fallbackContent);
+    console.log(`✅ 本地分析完成，发现 ${fallbackErrors.length} 个问题`);
+    
     // 返回模拟数据作为备选
     return NextResponse.json({
-      errors: generateFallbackErrors(fallbackContent)
+      errors: fallbackErrors,
+      message: '使用本地分析完成文档校对'
     });
   }
 }
@@ -218,7 +239,7 @@ function generateFallbackErrors(content: string): ErrorItem[] {
   
   if (!content || content.length === 0) {
     return [{
-      id: 'fallback_empty',
+      id: `fallback_empty_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'error',
       position: { start: 0, end: 0 },
       original: '空文档',
@@ -238,7 +259,7 @@ function generateFallbackErrors(content: string): ErrorItem[] {
     // 跳过单字符重复（可能是正常的）
     if (singleText.length >= 2) {
       errors.push({
-        id: `fallback_duplicate_${match.index}`,
+        id: `fallback_duplicate_${match.index}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         type: 'error',
         position: { start: match.index, end: match.index + duplicateText.length },
         original: duplicateText,
@@ -256,7 +277,7 @@ function generateFallbackErrors(content: string): ErrorItem[] {
     const singlePunct = match[1];
     
     errors.push({
-      id: `fallback_punctuation_${match.index}`,
+      id: `fallback_punctuation_${match.index}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'warning',
       position: { start: match.index, end: match.index + duplicatePunct.length },
       original: duplicatePunct,
@@ -279,7 +300,7 @@ function generateFallbackErrors(content: string): ErrorItem[] {
   commonErrors.forEach(({ pattern, suggestion, reason }) => {
     while ((match = pattern.exec(content)) !== null && errors.length < 10) {
       errors.push({
-        id: `fallback_common_${match.index}`,
+        id: `fallback_common_${match.index}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         type: 'error',
         position: { start: match.index, end: match.index + match[0].length },
         original: match[0],
@@ -300,7 +321,7 @@ function generateFallbackErrors(content: string): ErrorItem[] {
   expressionErrors.forEach(({ pattern, suggestion, reason }) => {
     while ((match = pattern.exec(content)) !== null && errors.length < 10) {
       errors.push({
-        id: `fallback_expression_${match.index}`,
+        id: `fallback_expression_${match.index}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         type: 'warning',
         position: { start: match.index, end: match.index + match[0].length },
         original: match[0],
@@ -320,7 +341,7 @@ function generateFallbackErrors(content: string): ErrorItem[] {
       const sentenceStart = content.indexOf(sentence, currentPos);
       if (sentenceStart !== -1) {
         errors.push({
-          id: `fallback_long_sentence_${index}`,
+          id: `fallback_long_sentence_${index}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'suggestion',
           position: { start: sentenceStart, end: sentenceStart + sentence.length },
           original: sentence,
@@ -337,7 +358,7 @@ function generateFallbackErrors(content: string): ErrorItem[] {
   if (errors.length === 0) {
     const sampleText = content.substring(0, Math.min(20, content.length));
     errors.push({
-      id: 'fallback_general',
+      id: `fallback_general_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'suggestion',
       position: { start: 0, end: sampleText.length },
       original: sampleText,

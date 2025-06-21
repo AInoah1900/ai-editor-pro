@@ -85,11 +85,14 @@ export async function POST(request: NextRequest) {
         
         // 使用新的DeepSeek客户端
         const { createDeepSeekClient } = await import('@/lib/deepseek/deepseek-client');
-        const deepSeekClient = createDeepSeekClient(DEEPSEEK_API_KEY);
+        const deepSeekClient = createDeepSeekClient(DEEPSEEK_API_KEY, {
+          timeout: 20000, // 减少到20秒超时
+          maxRetries: 2   // 减少重试次数
+        });
         
-        // 设置超时控制
+        // 设置更合理的超时控制
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('DeepSeek API调用超时')), 60000); // 60秒超时
+          setTimeout(() => reject(new Error('DeepSeek API调用超时')), 25000); // 25秒超时
         });
 
         const apiPromise = deepSeekClient.createChatCompletion({
@@ -116,10 +119,11 @@ ${formatKnowledge(relevantKnowledge)}
             }
           ],
           temperature: 0.1,
-          max_tokens: 3000, // 减少token数量，提高响应速度
+          max_tokens: 2500, // 进一步减少token数量，提高响应速度
           stream: false
         });
 
+        console.log('正在调用DeepSeek API...');
         const response = await Promise.race([apiPromise, timeoutPromise]) as any;
 
         const aiResponse = response.choices[0]?.message?.content;
@@ -171,7 +175,7 @@ ${formatKnowledge(relevantKnowledge)}
                 const position = calculateErrorPosition(content, error.original || '', index);
                 
                 return {
-                  id: error.id || `rag_error_${Date.now()}_${index}`,
+                  id: `rag_error_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
                   type: (error.type as 'error' | 'warning' | 'suggestion') || 'warning',
                   position: error.position || position,
                   original: error.original || '未知错误',
@@ -205,12 +209,27 @@ ${formatKnowledge(relevantKnowledge)}
         
         console.warn('DeepSeek API调用失败，降级到本地RAG分析');
       } catch (apiError) {
-        console.error('DeepSeek API错误:', apiError);
+        const errorMessage = apiError instanceof Error ? apiError.message : 'Unknown error';
+        console.error('DeepSeek API错误:', errorMessage);
+        
+        // 根据错误类型提供更详细的日志
+        if (errorMessage.includes('超时')) {
+          console.log('📡 网络超时，可能是网络连接较慢或API服务繁忙');
+        } else if (errorMessage.includes('401') || errorMessage.includes('403')) {
+          console.log('🔑 API密钥验证失败，请检查DEEPSEEK_API_KEY配置');
+        } else if (errorMessage.includes('429')) {
+          console.log('⚡ API调用频率超限，请稍后重试');
+        } else {
+          console.log('🔧 API调用异常，使用本地分析作为备选方案');
+        }
       }
     }
 
     // 7. 降级到本地RAG增强分析
-    console.log('使用本地RAG增强分析...');
+    console.log('🔄 使用本地RAG增强分析...');
+    console.log(`📚 应用 ${relevantKnowledge.length} 条专业知识`);
+    console.log(`🎯 文档领域: ${domainInfo.domain} (置信度: ${domainInfo.confidence})`);
+    
     const localErrors = await generateRAGEnhancedErrors(content, relevantKnowledge, domainInfo);
     
     ragResult = {
@@ -221,6 +240,7 @@ ${formatKnowledge(relevantKnowledge)}
       fallback_used: true
     };
 
+    console.log(`✅ 本地RAG分析完成，发现 ${localErrors.length} 个问题`);
     return NextResponse.json(ragResult);
 
   } catch (error) {
@@ -357,7 +377,7 @@ function generateBasicErrors(content: string): ErrorItem[] {
   const punctuationIssues = content.match(/[，。！？；：""''（）【】]/g);
   if (punctuationIssues) {
     errors.push({
-      id: `basic_${Date.now()}_1`,
+      id: `basic_${Date.now()}_1_${Math.random().toString(36).substr(2, 9)}`,
       type: 'suggestion',
       position: { start: 0, end: content.length },
       original: '文档包含中文标点符号',
@@ -374,10 +394,10 @@ function generateBasicErrors(content: string): ErrorItem[] {
     wordCount[word] = (wordCount[word] || 0) + 1;
   });
   
-  Object.entries(wordCount).forEach(([word, count]) => {
+  Object.entries(wordCount).forEach(([word, count], index) => {
     if (count > 3 && word.length > 2) {
       errors.push({
-        id: `basic_${Date.now()}_2`,
+        id: `basic_${Date.now()}_2_${index}_${Math.random().toString(36).substr(2, 9)}`,
         type: 'warning',
         position: { start: 0, end: content.length },
         original: `词汇"${word}"重复使用${count}次`,
@@ -404,7 +424,7 @@ function checkTerminologyWithKnowledge(content: string, knowledge: KnowledgeItem
       
       if (matches) {
         errors.push({
-          id: `terminology_${Date.now()}_${index}`,
+          id: `terminology_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
           type: 'suggestion',
           position: { start: 0, end: content.length },
           original: `术语"${k.content}"的使用`,
@@ -430,7 +450,7 @@ function checkDomainSpecificIssues(content: string, domain: string): ErrorItem[]
       // 学术写作检查
       if (!content.includes('研究') && !content.includes('分析') && !content.includes('结论')) {
         errors.push({
-          id: `domain_${Date.now()}_1`,
+          id: `domain_${Date.now()}_1_${Math.random().toString(36).substr(2, 9)}`,
           type: 'warning',
           position: { start: 0, end: content.length },
           original: '学术写作结构',
@@ -445,7 +465,7 @@ function checkDomainSpecificIssues(content: string, domain: string): ErrorItem[]
       // 技术文档检查
       if (!content.includes('技术') && !content.includes('系统') && !content.includes('实现')) {
         errors.push({
-          id: `domain_${Date.now()}_2`,
+          id: `domain_${Date.now()}_2_${Math.random().toString(36).substr(2, 9)}`,
           type: 'suggestion',
           position: { start: 0, end: content.length },
           original: '技术文档内容',
