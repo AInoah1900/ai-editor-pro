@@ -42,13 +42,22 @@ interface RAGEnhancedResult {
   knowledge_used: string[];
   rag_confidence: number;
   fallback_used: boolean;
+  knowledge_sources: {
+    private_count: number;
+    shared_count: number;
+    total_count: number;
+  };
+  document_sources: {
+    private_documents: string[];
+    shared_documents: string[];
+  };
 }
 
 export async function POST(request: NextRequest) {
   console.log('开始RAG增强文档分析...');
   
   try {
-    const { content } = await request.json();
+    const { content, ownerId = 'default_user' } = await request.json();
 
     if (!content) {
       return NextResponse.json({ error: '文档内容不能为空' }, { status: 400 });
@@ -63,18 +72,31 @@ export async function POST(request: NextRequest) {
     const domainInfo = await domainClassifier.identifyDomain(content);
     console.log('领域识别结果:', domainInfo);
 
-    // 3. 检索相关知识
-    console.log('正在检索相关知识...');
-    const relevantKnowledge = await knowledgeRetriever.retrieveRelevantKnowledge(
+    // 3. 使用多知识库检索相关知识
+    console.log('正在从多知识库检索相关知识...');
+    const multiKnowledgeResult = await knowledgeRetriever.retrieveFromMultipleKnowledgeBases(
       content,
+      ownerId,
       domainInfo.domain,
       undefined, // 不限制知识类型
-      8 // 获取更多相关知识
+      4, // 专属知识库限制
+      6  // 共享知识库限制
     );
-    console.log(`检索到 ${relevantKnowledge.length} 条相关知识`);
 
-    // 4. 构建增强的提示词
-    const enhancedPrompt = buildEnhancedPrompt(content, relevantKnowledge, domainInfo);
+    console.log(`多知识库检索完成:`, {
+      private: multiKnowledgeResult.private_knowledge.length,
+      shared: multiKnowledgeResult.shared_knowledge.length,
+      combined: multiKnowledgeResult.combined_knowledge.length,
+      private_docs: multiKnowledgeResult.private_documents.length,
+      shared_docs: multiKnowledgeResult.shared_documents.length
+    });
+
+    // 4. 构建增强的提示词（使用合并后的知识）
+    const enhancedPrompt = buildEnhancedPromptWithMultiKnowledge(
+      content, 
+      multiKnowledgeResult, 
+      domainInfo
+    );
 
     let ragResult: RAGEnhancedResult;
 
@@ -103,7 +125,7 @@ export async function POST(request: NextRequest) {
               content: `你是一个专业的${domainInfo.domain}领域期刊编辑和校对专家。你拥有深厚的学术背景和丰富的编辑经验。
 
 基于以下专业知识库进行精确校对：
-${formatKnowledge(relevantKnowledge)}
+${formatKnowledge(multiKnowledgeResult.combined_knowledge)}
 
 请特别关注：
 1. 领域特定术语的准确性和规范性
@@ -188,9 +210,18 @@ ${formatKnowledge(relevantKnowledge)}
               ragResult = {
                 errors: enhancedErrors,
                 domain_info: domainInfo,
-                knowledge_used: relevantKnowledge.map(k => k.content),
-                rag_confidence: calculateRAGConfidence(relevantKnowledge, domainInfo),
-                fallback_used: false
+                knowledge_used: multiKnowledgeResult.combined_knowledge.map(k => k.content),
+                rag_confidence: calculateRAGConfidence(multiKnowledgeResult.combined_knowledge, domainInfo),
+                fallback_used: false,
+                knowledge_sources: {
+                  private_count: multiKnowledgeResult.private_knowledge.length,
+                  shared_count: multiKnowledgeResult.shared_knowledge.length,
+                  total_count: multiKnowledgeResult.private_knowledge.length + multiKnowledgeResult.shared_knowledge.length
+                },
+                document_sources: {
+                  private_documents: multiKnowledgeResult.private_documents,
+                  shared_documents: multiKnowledgeResult.shared_documents
+                }
               };
 
               // 6. 学习用户交互（这里可以在用户操作后调用）
@@ -227,17 +258,26 @@ ${formatKnowledge(relevantKnowledge)}
 
     // 7. 降级到本地RAG增强分析
     console.log('🔄 使用本地RAG增强分析...');
-    console.log(`📚 应用 ${relevantKnowledge.length} 条专业知识`);
+    console.log(`📚 应用 ${multiKnowledgeResult.combined_knowledge.length} 条专业知识`);
     console.log(`🎯 文档领域: ${domainInfo.domain} (置信度: ${domainInfo.confidence})`);
     
-    const localErrors = await generateRAGEnhancedErrors(content, relevantKnowledge, domainInfo);
+    const localErrors = await generateRAGEnhancedErrors(content, multiKnowledgeResult.combined_knowledge, domainInfo);
     
     ragResult = {
       errors: localErrors,
       domain_info: domainInfo,
-      knowledge_used: relevantKnowledge.map(k => k.content),
-      rag_confidence: calculateRAGConfidence(relevantKnowledge, domainInfo),
-      fallback_used: true
+      knowledge_used: multiKnowledgeResult.combined_knowledge.map(k => k.content),
+      rag_confidence: calculateRAGConfidence(multiKnowledgeResult.combined_knowledge, domainInfo),
+      fallback_used: true,
+      knowledge_sources: {
+        private_count: 0,
+        shared_count: 0,
+        total_count: 0
+      },
+      document_sources: {
+        private_documents: [],
+        shared_documents: []
+      }
     };
 
     console.log(`✅ 本地RAG分析完成，发现 ${localErrors.length} 个问题`);
@@ -280,46 +320,99 @@ ${formatKnowledge(relevantKnowledge)}
 }
 
 /**
- * 构建增强的提示词
+ * 构建多知识库增强的提示词
  */
-function buildEnhancedPrompt(
+function buildEnhancedPromptWithMultiKnowledge(
   content: string,
-  knowledge: KnowledgeItem[],
+  multiKnowledgeResult: {
+    private_knowledge: KnowledgeItem[];
+    shared_knowledge: KnowledgeItem[];
+    combined_knowledge: KnowledgeItem[];
+    private_documents: any[];
+    shared_documents: any[];
+  },
   domainInfo: DomainInfo
 ): string {
-  const knowledgeContext = knowledge.length > 0 
-    ? `\n\n基于以下专业知识库进行校对：\n${knowledge.map(k => `- ${k.content} (置信度: ${k.confidence})`).join('\n')}`
-    : '';
+  const { private_knowledge, shared_knowledge, combined_knowledge, private_documents, shared_documents } = multiKnowledgeResult;
+  
+  // 构建知识库信息摘要
+  const knowledgeSummary = `
+📚 知识库使用情况：
+- 专属知识库：${private_knowledge.length} 条专业知识
+- 共享知识库：${shared_knowledge.length} 条通用知识  
+- 相关专属文档：${private_documents.length} 个
+- 相关共享文档：${shared_documents.length} 个
+- 总计应用知识：${combined_knowledge.length} 条
 
-  return `请对以下${domainInfo.domain}领域的文档进行专业校对，识别并修正错误。
+🎯 领域分析：${domainInfo.domain} (置信度: ${domainInfo.confidence})
+🔑 关键词：${domainInfo.keywords.join(', ')}
+`;
 
-文档内容：
+  const privateKnowledgeSection = private_knowledge.length > 0 ? `
+🔒 专属知识库 (优先级高，个人定制)：
+${formatKnowledgeWithSource(private_knowledge, '专属')}
+` : '';
+
+  const sharedKnowledgeSection = shared_knowledge.length > 0 ? `
+🌐 共享知识库 (通用规范)：
+${formatKnowledgeWithSource(shared_knowledge, '共享')}
+` : '';
+
+  const documentContext = (private_documents.length > 0 || shared_documents.length > 0) ? `
+📄 相关文档参考：
+${private_documents.length > 0 ? `专属文档：${private_documents.map(d => d.filename).join(', ')}` : ''}
+${shared_documents.length > 0 ? `共享文档：${shared_documents.map(d => d.filename).join(', ')}` : ''}
+` : '';
+
+  return `请作为专业的${domainInfo.domain}领域期刊编辑，对以下文档进行精确校对和修改建议。
+
+${knowledgeSummary}
+
+${privateKnowledgeSection}
+
+${sharedKnowledgeSection}
+
+${documentContext}
+
+📋 校对要求：
+1. 优先应用专属知识库中的个人定制规则
+2. 结合共享知识库的通用规范
+3. 确保术语使用的准确性和一致性
+4. 关注学术写作的规范性
+5. 提供具体的修改建议和理由
+
+📝 待校对文档：
 ${content}
 
-领域信息：${domainInfo.domain} (置信度: ${domainInfo.confidence})
-关键词：${domainInfo.keywords.join(', ')}${knowledgeContext}
-
-请严格按照以下JSON格式返回结果，不要添加任何其他文本或说明：
-
+请严格按照以下JSON格式返回结果：
 {
   "errors": [
     {
-      "id": "error_1",
-      "type": "error",
-      "position": {"start": 0, "end": 5},
-      "original": "原始文本",
-      "suggestion": "建议修改",
-      "reason": "修改原因",
-      "category": "语法错误"
+      "type": "error|warning|suggestion",
+      "original": "原文内容",
+      "suggestion": "修改建议", 
+      "reason": "修改理由（说明来源：专属知识库/共享知识库）",
+      "category": "错误类别",
+      "position": {"start": 起始位置, "end": 结束位置}
     }
   ]
+}`;
 }
 
-重要要求：
-1. 只返回JSON，不要包含任何markdown标记
-2. 确保JSON格式完整和正确
-3. 如果没有发现错误，返回空数组：{"errors": []}
-4. 每个错误必须包含所有必需字段`;
+/**
+ * 格式化带来源标识的知识
+ */
+function formatKnowledgeWithSource(knowledge: KnowledgeItem[], source: string): string {
+  return knowledge.map((item, index) => {
+    const confidenceLevel = item.confidence >= 0.8 ? '🔴高' : item.confidence >= 0.6 ? '🟡中' : '🟢低';
+    const relevanceScore = item.relevance_score ? ` (相关度: ${(item.relevance_score * 100).toFixed(1)}%)` : '';
+    
+    return `${index + 1}. [${item.type}] ${item.content}
+   💡 应用场景: ${item.context}
+   📊 置信度: ${confidenceLevel} (${item.confidence})${relevanceScore}
+   🏷️ 标签: ${item.tags.join(', ')}
+   📍 来源: ${item.source}`;
+  }).join('\n\n');
 }
 
 /**

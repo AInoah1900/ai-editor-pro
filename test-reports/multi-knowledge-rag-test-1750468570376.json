@@ -1,0 +1,125 @@
+{
+  "timestamp": "2025-06-21T01:16:10.374Z",
+  "test_config": {
+    "baseUrl": "http://localhost:3000",
+    "testDocument": "人工智能技术在医学诊断中的应用前景广阔。机器学习算法能够通过分析大量的医疗数据，\n    提高疾病诊断的准确性。深度学习模型在医学影像分析方面表现尤为突出，能够识别细微的\n    病理变化。然而，AI系统的黑盒特性使得其决策过程缺乏透明度，这在医疗领域是一个重要\n    的伦理问题。医生和患者需要理解AI的诊断依据，以建立对技术的信任。\n    \n    此外，数据隐私和安全性也是AI医疗应用中需要重点考虑的问题。医疗数据的敏感性要求\n    严格的数据保护措施。同时，AI模型的偏见问题也不容忽视，训练数据的不平衡可能导致\n    对某些群体的诊断偏差。",
+    "ownerId": "test_user_001"
+  },
+  "results": {
+    "rag_analysis": {
+      "errors": [
+        {
+          "id": "rag_error_1750468557579_0_4fk3yaswt",
+          "type": "suggestion",
+          "position": {
+            "start": 0,
+            "end": 15
+          },
+          "original": "人工智能技术在医学诊断中的应用前景广阔",
+          "suggestion": "人工智能技术在医疗诊断中的应用前景广阔",
+          "reason": "在医学文献中，'医疗诊断'比'医学诊断'更常用，更符合学术写作规范",
+          "category": "术语规范性"
+        },
+        {
+          "id": "rag_error_1750468557579_1_99xdh0qn1",
+          "type": "suggestion",
+          "position": {
+            "start": 16,
+            "end": 35
+          },
+          "original": "机器学习算法能够通过分析大量的医疗数据",
+          "suggestion": "机器学习算法能够通过分析大规模医疗数据",
+          "reason": "'大规模'比'大量的'更专业，符合学术写作风格",
+          "category": "表达规范性"
+        },
+        {
+          "id": "rag_error_1750468557579_2_3zgw5xjxg",
+          "type": "suggestion",
+          "position": {
+            "start": 96,
+            "end": 106
+          },
+          "original": "AI系统的黑盒特性",
+          "suggestion": "AI系统的'黑箱'特性",
+          "reason": "在医学文献中，'黑箱'是更标准的术语表达",
+          "category": "术语准确性"
+        },
+        {
+          "id": "rag_error_1750468557579_3_65ycq9asg",
+          "type": "suggestion",
+          "position": {
+            "start": 132,
+            "end": 142
+          },
+          "original": "医生和患者需要理解AI的诊断依据",
+          "suggestion": "临床医生和患者需要理解AI的诊断依据",
+          "reason": "'临床医生'比'医生'更专业，更符合医学文献的表达习惯",
+          "category": "术语规范性"
+        },
+        {
+          "id": "rag_error_1750468557579_4_ieyit2ruz",
+          "type": "suggestion",
+          "position": {
+            "start": 180,
+            "end": 198
+          },
+          "original": "数据隐私和安全性也是AI医疗应用中需要重点考虑的问题",
+          "suggestion": "数据隐私保护和安全性也是AI医疗应用中需要重点考虑的问题",
+          "reason": "'数据隐私保护'是更完整的专业表达",
+          "category": "术语完整性"
+        },
+        {
+          "id": "rag_error_1750468557579_5_80zzr2g89",
+          "type": "suggestion",
+          "position": {
+            "start": 223,
+            "end": 241
+          },
+          "original": "医疗数据的敏感性要求严格的数据保护措施",
+          "suggestion": "医疗数据的敏感性要求实施严格的数据保护措施",
+          "reason": "'实施...措施'是更规范的表达方式",
+          "category": "表达规范性"
+        },
+        {
+          "id": "rag_error_1750468557579_6_ehogq5h2r",
+          "type": "suggestion",
+          "position": {
+            "start": 265,
+            "end": 276
+          },
+          "original": "AI模型的偏见问题也不容忽视",
+          "suggestion": "AI模型的算法偏见问题也不容忽视",
+          "reason": "'算法偏见'是更专业的术语表达",
+          "category": "术语准确性"
+        }
+      ],
+      "domain_info": {
+        "domain": "medical",
+        "confidence": 0.5583333333333333,
+        "keywords": [
+          "医疗",
+          "疾病",
+          "患者",
+          "诊断",
+          "医生"
+        ]
+      },
+      "knowledge_used": [],
+      "rag_confidence": 0,
+      "fallback_used": false,
+      "knowledge_sources": {
+        "private_count": 0,
+        "shared_count": 0,
+        "total_count": 0
+      },
+      "document_sources": {
+        "private_documents": [],
+        "shared_documents": []
+      }
+    },
+    "multi_knowledge_enabled": false,
+    "document_sources_enabled": false,
+    "error_detection_count": 7,
+    "knowledge_application_count": 0
+  }
+}

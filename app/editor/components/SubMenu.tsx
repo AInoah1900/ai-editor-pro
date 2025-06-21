@@ -245,19 +245,20 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
         const content = await response.text();
         setUploadedDocument(content);
         
-        // 根据文档类型决定打开方式
-        if (document.ownership_type === 'private') {
-          setActiveSubMenu('rag-editor'); // 专属知识库使用AI编辑器
-        } else {
-          setActiveSubMenu('document-viewer'); // 共享知识库使用文档查看器
-        }
+        // 统一使用文档查看器，无论是专属还是共享知识库
+        setActiveSubMenu('document-viewer');
       } else {
         // 处理文档不存在的情况
-        const errorData = await response.json();
-        console.error('获取文档内容失败:', errorData);
-        
-        // 显示友好的错误提示
-        alert(`无法打开文档 "${document.filename}"\n原因: ${errorData.error || '文档不存在'}\n\n请联系管理员或重新上传此文档。`);
+        try {
+          const errorData = await response.json();
+          console.error('获取文档内容失败:', errorData);
+          alert(`无法打开文档 "${document.filename}"\n原因: ${errorData.error || '文档不存在'}\n\n请联系管理员或重新上传此文档。`);
+        } catch (parseError) {
+          // 如果响应不是JSON格式，获取原始文本
+          const errorText = await response.text();
+          console.error('文档打开失败 - 非JSON响应:', errorText);
+          alert(`无法打开文档 "${document.filename}"\n服务器返回了意外的响应格式\n\n请联系管理员检查服务器状态。`);
+        }
       }
     } catch (error) {
       console.error('打开文档失败:', error);

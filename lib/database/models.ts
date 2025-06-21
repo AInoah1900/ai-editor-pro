@@ -70,9 +70,11 @@ export interface KnowledgeItem {
   confidence: number;
   tags: string[];
   vector_id: string;
+  ownership_type?: 'private' | 'shared';
+  owner_id?: string;
   created_at: Date;
   updated_at: Date;
-  relevance_score?: number; // 用于搜索结果的相关度评分
+  relevance_score?: number;
 }
 
 /**
@@ -124,6 +126,8 @@ export class DatabaseModels {
           confidence DECIMAL(3,2) NOT NULL,
           tags TEXT[],
           vector_id VARCHAR(255) NOT NULL,
+          ownership_type VARCHAR(10) DEFAULT 'shared',
+          owner_id VARCHAR(255),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -208,8 +212,8 @@ export class DatabaseModels {
       await client.query(`
         INSERT INTO knowledge_items (
           id, type, domain, content, context, source, confidence,
-          tags, vector_id, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          tags, vector_id, ownership_type, owner_id, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT (id) DO UPDATE SET
           type = EXCLUDED.type,
           domain = EXCLUDED.domain,
@@ -219,6 +223,8 @@ export class DatabaseModels {
           confidence = EXCLUDED.confidence,
           tags = EXCLUDED.tags,
           vector_id = EXCLUDED.vector_id,
+          ownership_type = EXCLUDED.ownership_type,
+          owner_id = EXCLUDED.owner_id,
           updated_at = CURRENT_TIMESTAMP
       `, [
         item.id,
@@ -230,6 +236,8 @@ export class DatabaseModels {
         item.confidence,
         item.tags,
         item.vector_id,
+        item.ownership_type || 'shared',
+        item.owner_id || null,
         item.created_at,
         item.updated_at,
       ]);
@@ -529,6 +537,52 @@ export class DatabaseModels {
   }
 
   /**
+   * 获取专属知识项
+   */
+  async getPrivateKnowledgeItems(ownerId: string, limit: number = 50): Promise<KnowledgeItem[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM knowledge_items 
+        WHERE ownership_type = 'private' AND owner_id = $1
+        ORDER BY created_at DESC 
+        LIMIT $2
+      `, [ownerId, limit]);
+
+      return result.rows as KnowledgeItem[];
+    } catch (error) {
+      console.error('获取专属知识项失败:', error);
+      return [];
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 获取共享知识项
+   */
+  async getSharedKnowledgeItems(limit: number = 50): Promise<KnowledgeItem[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM knowledge_items 
+        WHERE ownership_type = 'shared' OR ownership_type IS NULL
+        ORDER BY created_at DESC 
+        LIMIT $1
+      `, [limit]);
+
+      return result.rows as KnowledgeItem[];
+    } catch (error) {
+      console.error('获取共享知识项失败:', error);
+      return [];
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * 获取知识库文档统计
    */
   async getKnowledgeLibraryStats(): Promise<{
@@ -596,4 +650,73 @@ export class DatabaseModels {
       client.release();
     }
   }
-} 
+
+  /**
+   * 获取知识项统计（按所有权类型）
+   */
+  async getKnowledgeItemsStats(): Promise<{
+    total_private: number;
+    total_shared: number;
+    private_by_domain: { [key: string]: number };
+    shared_by_domain: { [key: string]: number };
+  }> {
+    const client = await this.pool.getClient();
+    
+    try {
+      // 获取专属知识项统计
+      const privateStats = await client.query(`
+        SELECT COUNT(*) as total_private FROM knowledge_items 
+        WHERE ownership_type = 'private'
+      `);
+
+      // 获取共享知识项统计
+      const sharedStats = await client.query(`
+        SELECT COUNT(*) as total_shared FROM knowledge_items 
+        WHERE ownership_type = 'shared' OR ownership_type IS NULL
+      `);
+
+      // 获取专属知识项按领域分布
+      const privateDomainStats = await client.query(`
+        SELECT domain, COUNT(*) as count 
+        FROM knowledge_items 
+        WHERE ownership_type = 'private' AND domain IS NOT NULL
+        GROUP BY domain
+      `);
+
+      // 获取共享知识项按领域分布
+      const sharedDomainStats = await client.query(`
+        SELECT domain, COUNT(*) as count 
+        FROM knowledge_items 
+        WHERE (ownership_type = 'shared' OR ownership_type IS NULL) AND domain IS NOT NULL
+        GROUP BY domain
+      `);
+
+      const private_by_domain: { [key: string]: number } = {};
+      privateDomainStats.rows.forEach((row: { domain: string; count: string }) => {
+        private_by_domain[row.domain] = parseInt(row.count);
+      });
+
+      const shared_by_domain: { [key: string]: number } = {};
+      sharedDomainStats.rows.forEach((row: { domain: string; count: string }) => {
+        shared_by_domain[row.domain] = parseInt(row.count);
+      });
+
+      return {
+        total_private: parseInt(privateStats.rows[0].total_private),
+        total_shared: parseInt(sharedStats.rows[0].total_shared),
+        private_by_domain,
+        shared_by_domain,
+      };
+    } catch (error) {
+      console.error('获取知识项统计失败:', error);
+      return {
+        total_private: 0,
+        total_shared: 0,
+        private_by_domain: {},
+        shared_by_domain: {},
+      };
+    } finally {
+      client.release();
+    }
+  }
+}

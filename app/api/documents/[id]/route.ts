@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DatabaseModels } from '@/lib/database/models';
 import fs from 'fs';
 import path from 'path';
+import mammoth from 'mammoth';
 
 /**
  * 文档访问API
@@ -51,42 +52,69 @@ export async function GET(
       }
 
       try {
-        // 根据文件类型选择合适的读取方式
         const fileExtension = fileMetadata.file_type.toLowerCase();
-        let fileBuffer: Buffer;
-        let contentType: string;
-        
-        if (fileExtension === 'txt' || fileExtension === 'md' || fileExtension === 'html') {
-          // 文本文件使用UTF-8编码读取
-          const textContent = fs.readFileSync(filePath, 'utf8');
-          fileBuffer = Buffer.from(textContent, 'utf8');
-          contentType = getTextMimeType(fileExtension);
-        } else {
-          // 二进制文件直接读取
-          fileBuffer = fs.readFileSync(filePath);
-          contentType = getMimeType(fileExtension);
-        }
-        
-        // 设置响应头
-        const headers = new Headers();
-        headers.set('Content-Type', `${contentType}; charset=utf-8`);
-        headers.set('Content-Length', fileBuffer.length.toString());
         
         if (action === 'download') {
+          // 下载模式：直接返回文件
+          const fileBuffer = fs.readFileSync(filePath);
+          const contentType = getMimeType(fileExtension);
+          
+          const headers = new Headers();
+          headers.set('Content-Type', contentType);
+          headers.set('Content-Length', fileBuffer.length.toString());
           headers.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileMetadata.filename)}`);
+          
+          return new NextResponse(fileBuffer, {
+            status: 200,
+            headers
+          });
         } else {
-          headers.set('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(fileMetadata.filename)}`);
+          // 打开模式：提取文本内容
+          let textContent: string;
+          
+          if (fileExtension === 'txt' || fileExtension === 'md') {
+            // 文本文件直接读取
+            textContent = fs.readFileSync(filePath, 'utf8');
+          } else if (fileExtension === 'docx') {
+            // DOCX文件使用mammoth提取文本
+            try {
+              const buffer = fs.readFileSync(filePath);
+              const result = await mammoth.extractRawText({ buffer });
+              textContent = result.value;
+              
+              if (result.messages.length > 0) {
+                console.warn('DOCX解析警告:', result.messages);
+              }
+              
+              // 检查是否成功提取到内容
+              if (!textContent || textContent.trim().length === 0) {
+                textContent = `DOCX文档内容为空或无法解析。\n\n这可能是由于文档格式复杂或包含特殊元素。\n\n请点击下载按钮获取原始文件。`;
+              }
+            } catch (mammothError) {
+              console.error('DOCX解析失败:', mammothError);
+              textContent = `DOCX文档解析失败。\n\n错误信息: ${mammothError instanceof Error ? mammothError.message : '未知错误'}\n\n请点击下载按钮获取原始文件。`;
+            }
+          } else if (fileExtension === 'pdf') {
+            // PDF文件暂时不支持在线预览，提供下载选项
+            textContent = `PDF文档暂不支持在线预览。\n\n这是为了确保系统稳定性和兼容性。\n\n请点击下载按钮获取原始PDF文件进行查看。`;
+          } else {
+            // 其他格式暂不支持文本提取，返回提示信息
+            textContent = `暂不支持 ${fileExtension.toUpperCase()} 格式的在线预览。\n\n请点击下载按钮获取原始文件。`;
+          }
+          
+          // 返回提取的文本内容
+          return new NextResponse(textContent, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8'
+            }
+          });
         }
-        
-        return new NextResponse(fileBuffer, {
-          status: 200,
-          headers
-        });
       } catch (error) {
-        console.error('读取文件失败:', error);
+        console.error('处理文件失败:', error);
         return NextResponse.json({
           success: false,
-          error: '读取文件失败'
+          error: `处理文件失败: ${error instanceof Error ? error.message : '未知错误'}`
         }, { status: 500 });
       }
     }

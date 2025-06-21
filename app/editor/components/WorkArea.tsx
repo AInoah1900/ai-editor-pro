@@ -40,6 +40,13 @@ interface WorkAreaProps {
   setActiveSubMenu: (subMenu: string) => void;
 }
 
+// Toast通知接口
+interface ToastMessage {
+  id: string;
+  type: 'success' | 'error' | 'info';
+  message: string;
+}
+
 export default function WorkArea({ 
   activeSubMenu, 
   uploadedDocument, 
@@ -65,6 +72,31 @@ export default function WorkArea({
   // 文件上传相关状态
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isSelectingFile, setIsSelectingFile] = useState(false);
+  
+  // 文档查看器状态
+  const [documentSource, setDocumentSource] = useState<'personal' | 'shared'>('shared');
+  const [currentDocument, setCurrentDocument] = useState<FileMetadata | null>(null);
+  
+  // Toast通知状态
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Toast通知函数
+  const showToast = (type: 'success' | 'error' | 'info', message: string) => {
+    const id = Date.now().toString();
+    const newToast: ToastMessage = { id, type, message };
+    setToasts(prev => [...prev, newToast]);
+    
+    // 3秒后自动移除Toast
+    setTimeout(() => {
+      setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, 3000);
+  };
+
+  // 移除Toast
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
 
   // 加载知识库文档列表
   const loadLibraryFiles = async (libraryType: 'private' | 'shared') => {
@@ -142,14 +174,14 @@ export default function WorkArea({
       if (result.success) {
         // 上传成功后重新加载文档列表
         await loadLibraryFiles(libraryType);
-        alert('文档上传成功！');
+        showToast('success', '文档上传成功！');
       } else {
         throw new Error(result.error || '上传失败');
       }
       
     } catch (error) {
       console.error('文档上传失败:', error);
-      alert('文档上传失败: ' + (error instanceof Error ? error.message : '请重试'));
+      showToast('error', '文档上传失败: ' + (error instanceof Error ? error.message : '请重试'));
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
@@ -158,15 +190,40 @@ export default function WorkArea({
 
   // 触发文件选择
   const triggerFileUpload = (libraryType: 'private' | 'shared') => {
+    setIsSelectingFile(true);
+    showToast('info', '请选择要上传的文档文件...');
+    
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.pdf,.doc,.docx,.txt,.md';
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
+      setIsSelectingFile(false);
       if (file) {
+        showToast('info', `正在准备上传文件: ${file.name}`);
         handleKnowledgeFileUpload(file, libraryType);
+      } else {
+        showToast('info', '未选择文件，上传已取消');
       }
     };
+    
+    // 处理用户取消文件选择的情况
+    input.oncancel = () => {
+      setIsSelectingFile(false);
+      showToast('info', '文件选择已取消');
+    };
+    
+    // 添加焦点事件监听，处理对话框关闭但没有触发onchange的情况
+    const handleFocus = () => {
+      setTimeout(() => {
+        if (!input.files || input.files.length === 0) {
+          setIsSelectingFile(false);
+        }
+      }, 1000);
+      window.removeEventListener('focus', handleFocus);
+    };
+    window.addEventListener('focus', handleFocus);
+    
     input.click();
   };
 
@@ -209,7 +266,7 @@ export default function WorkArea({
             {/* 新增知识库按钮 */}
             <button 
               onClick={() => triggerFileUpload(actualLibraryType)}
-              disabled={isUploading}
+              disabled={isUploading || isSelectingFile}
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                 libraryType === 'personal'
                   ? 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-purple-400'
@@ -218,12 +275,20 @@ export default function WorkArea({
             >
               {isUploading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : isSelectingFile ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
               ) : (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
               )}
-              <span>{isUploading ? '上传中...' : '新增知识库'}</span>
+              <span>
+                {isUploading ? '上传中...' : 
+                 isSelectingFile ? '选择文件...' : 
+                 '新增知识库'}
+              </span>
             </button>
           </div>
           
@@ -314,14 +379,16 @@ export default function WorkArea({
               </p>
               <button 
                 onClick={() => triggerFileUpload(actualLibraryType)}
-                disabled={isUploading}
+                disabled={isUploading || isSelectingFile}
                 className={`px-6 py-3 rounded-lg font-medium transition-colors ${
                   libraryType === 'personal'
                     ? 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-purple-400'
                     : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-green-400'
                 }`}
               >
-                {isUploading ? '上传中...' : (libraryType === 'personal' ? '上传个人文档' : '添加共享文档')}
+                {isUploading ? '上传中...' : 
+                 isSelectingFile ? '选择文件...' : 
+                 (libraryType === 'personal' ? '上传个人文档' : '添加共享文档')}
               </button>
             </div>
           ) : (
@@ -383,14 +450,20 @@ export default function WorkArea({
                   
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => handleOpenDocument(doc, libraryType === 'personal' ? 'edit' : 'view')}
+                      onClick={() => handleOpenDocument(doc, 'view')}
                       className={`flex-1 px-3 py-2 text-sm text-white rounded-lg transition-colors ${
                         libraryType === 'personal' 
                           ? 'bg-purple-600 hover:bg-purple-700' 
                           : 'bg-green-600 hover:bg-green-700'
                       }`}
+                      title={doc.file_type.toLowerCase() === 'docx' ? '支持DOCX格式预览' : ''}
                     >
-                      {libraryType === 'personal' ? 'AI编辑' : '查看文档'}
+                      {doc.file_type.toLowerCase() === 'docx' && (
+                        <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      )}
+                      查看文档
                     </button>
                     <button
                       onClick={() => handleDownloadDocument(doc)}
@@ -472,12 +545,22 @@ export default function WorkArea({
 
   // 在工作区内打开文档
   const handleOpenDocument = async (document: FileMetadata, mode: 'edit' | 'view' = 'edit') => {
+    // 显示加载提示
+    showToast('info', `正在打开文档 "${document.filename}"...`);
+    
     try {
       const response = await fetch(`/api/documents/${document.vector_id}?action=open`);
       
       if (response.ok) {
         const content = await response.text();
         setUploadedDocument(content);
+        setCurrentDocument(document); // 保存当前文档信息
+        
+        // 记录文档来源，用于返回时跳转到正确的列表
+        setDocumentSource(document.ownership_type === 'private' ? 'personal' : 'shared');
+        
+        // 显示成功提示
+        showToast('success', `文档 "${document.filename}" 打开成功`);
         
         // 根据模式决定跳转到哪个子菜单
         if (mode === 'edit') {
@@ -487,20 +570,25 @@ export default function WorkArea({
         }
       } else {
         // 处理文档不存在的情况
-        const errorData = await response.json();
-        console.error('获取文档内容失败:', errorData);
-        
-        // 显示友好的错误提示
-        alert(`无法打开文档 "${document.filename}"\n原因: ${errorData.error || '文档不存在'}\n\n请联系管理员或重新上传此文档。`);
-        
-        // 可选：从列表中移除不存在的文档
-        if (confirm('是否从知识库中移除此无效文档？')) {
-          await removeInvalidDocument(document);
+        try {
+          const errorData = await response.json();
+          console.error('获取文档内容失败:', errorData);
+          showToast('error', `无法打开文档 "${document.filename}": ${errorData.error || '文档不存在'}`);
+          
+          // 可选：从列表中移除不存在的文档
+          if (confirm('是否从知识库中移除此无效文档？')) {
+            await removeInvalidDocument(document);
+          }
+        } catch (parseError) {
+          // 如果响应不是JSON格式，获取原始文本
+          const errorText = await response.text();
+          console.error('文档打开失败 - 非JSON响应:', errorText);
+          showToast('error', `无法打开文档 "${document.filename}": 服务器返回了意外的响应格式`);
         }
       }
     } catch (error) {
       console.error('打开文档失败:', error);
-      alert(`打开文档失败: ${error instanceof Error ? error.message : '网络错误'}`);
+      showToast('error', `打开文档失败: ${error instanceof Error ? error.message : '网络错误'}`);
     }
   };
 
@@ -510,10 +598,10 @@ export default function WorkArea({
       // 这里可以调用删除API，暂时只是重新加载列表
       const libraryType = document.ownership_type === 'private' ? 'private' : 'shared';
       await loadLibraryFiles(libraryType);
-      alert('文档已从列表中移除');
+      showToast('success', '文档已从列表中移除');
     } catch (error) {
       console.error('移除文档失败:', error);
-      alert('移除文档失败，请手动刷新页面');
+      showToast('error', '移除文档失败，请手动刷新页面');
     }
   };
 
@@ -583,28 +671,57 @@ export default function WorkArea({
         );
 
       case 'document-viewer':
-        return uploadedDocument ? (
+        return uploadedDocument && currentDocument ? (
           <div className="flex flex-col h-full">
             {/* 文档查看器头部 */}
             <div className="bg-white border-b border-gray-200 p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                    currentDocument.file_type === 'pdf' ? 'bg-red-100 text-red-600' :
+                    currentDocument.file_type === 'docx' ? 'bg-blue-100 text-blue-600' :
+                    'bg-green-100 text-green-600'
+                  }`}>
+                    {currentDocument.file_type === 'pdf' ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    ) : currentDocument.file_type === 'docx' ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    )}
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">文档查看器</h3>
-                    <p className="text-sm text-gray-500">共享知识库文档 - 只读模式</p>
+                    <h3 className="text-lg font-semibold text-gray-900 truncate max-w-xs" title={currentDocument.filename}>
+                      {currentDocument.filename}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {currentDocument.file_type.toUpperCase()} • {formatFileSize(currentDocument.file_size)} • 只读模式
+                    </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => setActiveSubMenu('shared')}
-                  className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  返回列表
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handleDownloadDocument(currentDocument)}
+                    className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>下载</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveSubMenu(documentSource)}
+                    className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    返回列表
+                  </button>
+                </div>
               </div>
             </div>
             
@@ -613,9 +730,40 @@ export default function WorkArea({
               <div className="max-w-4xl mx-auto">
                 <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
                   <div className="p-6">
-                    <pre className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed font-sans">
-                      {uploadedDocument}
-                    </pre>
+                    {uploadedDocument.includes('暂不支持') ? (
+                      // 不支持的格式显示提示信息
+                      <div className="text-center py-12">
+                        <div className="text-gray-400 mb-4">
+                          <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <h4 className="text-lg font-medium text-gray-900 mb-2">无法预览此格式</h4>
+                        <p className="text-gray-500 mb-4 whitespace-pre-line">{uploadedDocument}</p>
+                        <button
+                          onClick={() => handleDownloadDocument(currentDocument)}
+                          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 mx-auto"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span>下载原文件</span>
+                        </button>
+                      </div>
+                    ) : (
+                      // 支持的格式显示文档内容
+                      <div>
+                        <div className="mb-4 pb-4 border-b border-gray-200">
+                          <div className="flex items-center justify-between text-sm text-gray-500">
+                            <span>文档内容预览</span>
+                            <span>上传时间: {formatDate(currentDocument.upload_time)}</span>
+                          </div>
+                        </div>
+                        <pre className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed font-sans">
+                          {uploadedDocument}
+                        </pre>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -631,10 +779,10 @@ export default function WorkArea({
               </div>
               <p className="text-gray-500 mb-4">请选择文档进行查看</p>
               <button
-                onClick={() => setActiveSubMenu('shared')}
+                onClick={() => setActiveSubMenu(documentSource)}
                 className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
               >
-                返回共享知识库
+                返回知识库
               </button>
             </div>
           </div>
@@ -1093,8 +1241,49 @@ export default function WorkArea({
   };
 
   return (
-    <div className="flex-1 bg-gray-50 overflow-hidden">
+    <div className="flex-1 bg-gray-50 overflow-hidden relative">
       {renderContent()}
+      
+      {/* Toast通知容器 */}
+      {toasts.length > 0 && (
+        <div className="fixed top-4 right-4 z-50 space-y-2">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`flex items-center justify-between px-4 py-3 rounded-lg shadow-lg transition-all duration-300 transform translate-x-0 ${
+                toast.type === 'success' ? 'bg-green-600 text-white' :
+                toast.type === 'error' ? 'bg-red-600 text-white' :
+                'bg-blue-600 text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                {toast.type === 'success' ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : toast.type === 'error' ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+                <span className="text-sm font-medium">{toast.message}</span>
+              </div>
+              <button
+                onClick={() => removeToast(toast.id)}
+                className="ml-3 text-white hover:text-gray-200 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
-} 
+}

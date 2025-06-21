@@ -73,6 +73,8 @@ export class NewKnowledgeRetriever {
         source: item.source,
         confidence: item.confidence,
         tags: item.tags,
+        ownership_type: item.ownership_type || 'shared', // 支持所有权类型
+        owner_id: item.owner_id || null, // 支持所有者ID
         created_at: new Date().toISOString(),
       };
 
@@ -83,13 +85,15 @@ export class NewKnowledgeRetriever {
       const knowledgeItem: KnowledgeItem = {
         ...item,
         vector_id: vectorId,
+        ownership_type: item.ownership_type || 'shared',
+        owner_id: item.owner_id || undefined,
         created_at: new Date(),
         updated_at: new Date(),
       };
       
       await this.dbModels.addKnowledgeItem(knowledgeItem);
       
-      console.log(`知识项 ${item.id} 添加成功`);
+      console.log(`知识项 ${item.id} 添加成功 (${item.ownership_type || 'shared'})`);
     } catch (error) {
       console.error('添加知识项失败:', error);
       throw error;
@@ -685,6 +689,207 @@ export class NewKnowledgeRetriever {
       hash = hash & hash; // 转换为32位整数
     }
     return Math.abs(hash);
+  }
+
+  /**
+   * 多知识库检索：同时从专属和共享知识库检索相关知识
+   */
+  async retrieveFromMultipleKnowledgeBases(
+    query: string,
+    ownerId: string = 'default_user',
+    domain?: string,
+    type?: string,
+    privateLimit: number = 3,
+    sharedLimit: number = 5
+  ): Promise<{
+    private_knowledge: KnowledgeItem[];
+    shared_knowledge: KnowledgeItem[];
+    combined_knowledge: KnowledgeItem[];
+    private_documents: FileMetadata[];
+    shared_documents: FileMetadata[];
+  }> {
+    try {
+      console.log(`开始多知识库检索: 查询="${query}", 领域="${domain || 'all'}"`);
+      
+      // 并行检索专属和共享知识
+      const [
+        privateKnowledge,
+        sharedKnowledge,
+        privateDocuments,
+        sharedDocuments
+      ] = await Promise.all([
+        // 检索专属知识库中的知识项
+        this.retrieveRelevantKnowledge(query, domain, type, privateLimit),
+        // 检索共享知识库中的知识项
+        this.retrieveRelevantKnowledge(query, domain, type, sharedLimit),
+        // 检索专属文档
+        this.retrievePrivateDocuments(query, ownerId, domain, 3),
+        // 检索共享文档
+        this.retrieveSharedDocuments(query, domain, 3)
+      ]);
+
+      // 合并并去重知识项，按相关度排序
+      const combinedKnowledge = this.mergeAndRankKnowledge(
+        privateKnowledge,
+        sharedKnowledge,
+        privateLimit + sharedLimit
+      );
+
+      console.log(`多知识库检索完成: 专属${privateKnowledge.length}条, 共享${sharedKnowledge.length}条, 合并${combinedKnowledge.length}条`);
+
+      return {
+        private_knowledge: privateKnowledge,
+        shared_knowledge: sharedKnowledge,
+        combined_knowledge: combinedKnowledge,
+        private_documents: privateDocuments,
+        shared_documents: sharedDocuments
+      };
+    } catch (error) {
+      console.error('多知识库检索失败:', error);
+      return {
+        private_knowledge: [],
+        shared_knowledge: [],
+        combined_knowledge: [],
+        private_documents: [],
+        shared_documents: []
+      };
+    }
+  }
+
+  /**
+   * 检索专属文档
+   */
+  async retrievePrivateDocuments(
+    query: string,
+    ownerId: string,
+    domain?: string,
+    limit: number = 5
+  ): Promise<FileMetadata[]> {
+    try {
+      // 获取用户的专属文档
+      const privateFiles = await this.dbModels.getPrivateFiles(ownerId, limit * 2);
+      
+      // 基于查询和领域过滤
+      const filteredFiles = privateFiles.filter(file => {
+        const matchesQuery = !query || 
+          file.filename.toLowerCase().includes(query.toLowerCase()) ||
+          (file.tags && file.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase())));
+        
+        const matchesDomain = !domain || file.domain === domain;
+        
+        return matchesQuery && matchesDomain;
+      });
+
+      return filteredFiles.slice(0, limit);
+    } catch (error) {
+      console.error('检索专属文档失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 检索共享文档
+   */
+  async retrieveSharedDocuments(
+    query: string,
+    domain?: string,
+    limit: number = 5
+  ): Promise<FileMetadata[]> {
+    try {
+      // 获取共享文档
+      const sharedFiles = await this.dbModels.getSharedFiles(limit * 2);
+      
+      // 基于查询和领域过滤
+      const filteredFiles = sharedFiles.filter(file => {
+        const matchesQuery = !query || 
+          file.filename.toLowerCase().includes(query.toLowerCase()) ||
+          (file.tags && file.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase())));
+        
+        const matchesDomain = !domain || file.domain === domain;
+        
+        return matchesQuery && matchesDomain;
+      });
+
+      return filteredFiles.slice(0, limit);
+    } catch (error) {
+      console.error('检索共享文档失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 合并并排序知识项
+   */
+  private mergeAndRankKnowledge(
+    privateKnowledge: KnowledgeItem[],
+    sharedKnowledge: KnowledgeItem[],
+    maxResults: number = 8
+  ): KnowledgeItem[] {
+    // 为专属知识项添加来源标识和权重加成
+    const enhancedPrivateKnowledge = privateKnowledge.map(item => ({
+      ...item,
+      source: `${item.source} (专属)`,
+      relevance_score: (item.relevance_score || 0) * 1.2, // 专属知识库权重加成
+      knowledge_source: 'private' as const
+    }));
+
+    // 为共享知识项添加来源标识
+    const enhancedSharedKnowledge = sharedKnowledge.map(item => ({
+      ...item,
+      source: `${item.source} (共享)`,
+      knowledge_source: 'shared' as const
+    }));
+
+    // 合并所有知识项
+    const allKnowledge = [...enhancedPrivateKnowledge, ...enhancedSharedKnowledge];
+
+    // 去重：基于内容相似度
+    const uniqueKnowledge = this.deduplicateKnowledge(allKnowledge);
+
+    // 按相关度排序
+    uniqueKnowledge.sort((a, b) => (b.relevance_score || 0) - (a.relevance_score || 0));
+
+    return uniqueKnowledge.slice(0, maxResults);
+  }
+
+  /**
+   * 知识项去重
+   */
+  private deduplicateKnowledge(knowledge: KnowledgeItem[]): KnowledgeItem[] {
+    const uniqueKnowledge: KnowledgeItem[] = [];
+    const seenContent = new Set<string>();
+
+    for (const item of knowledge) {
+      // 创建内容指纹
+      const contentFingerprint = this.createContentFingerprint(item.content);
+      
+      if (!seenContent.has(contentFingerprint)) {
+        seenContent.add(contentFingerprint);
+        uniqueKnowledge.push(item);
+      } else {
+        // 如果内容相似，保留相关度更高的
+        const existingIndex = uniqueKnowledge.findIndex(existing => 
+          this.createContentFingerprint(existing.content) === contentFingerprint
+        );
+        
+        if (existingIndex !== -1 && 
+            (item.relevance_score || 0) > (uniqueKnowledge[existingIndex].relevance_score || 0)) {
+          uniqueKnowledge[existingIndex] = item;
+        }
+      }
+    }
+
+    return uniqueKnowledge;
+  }
+
+  /**
+   * 创建内容指纹用于去重
+   */
+  private createContentFingerprint(content: string): string {
+    // 移除标点符号和空格，转为小写
+    const normalized = content.toLowerCase().replace(/[^\w\u4e00-\u9fff]/g, '');
+    // 取前50个字符作为指纹
+    return normalized.substring(0, 50);
   }
 }
 

@@ -136,7 +136,9 @@ export async function POST(request: NextRequest) {
         context: knowledge.context || '',
         source: knowledge.source || '用户添加',
         confidence: knowledge.confidence || 0.8,
-        tags: knowledge.tags || []
+        tags: knowledge.tags || [],
+        ownership_type: knowledge.ownership_type || 'shared', // 支持所有权类型
+        owner_id: knowledge.owner_id || undefined // 支持所有者ID
       };
       
       await retriever.addKnowledgeItem(knowledgeItem);
@@ -144,7 +146,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: '知识项添加成功',
-        data: knowledgeItem
+        data: knowledgeItem,
+        id: knowledgeItem.id
+      });
+    }
+    
+    // 支持直接添加知识项（不需要action参数）
+    if (!action && body.type && body.content) {
+      const knowledgeItem = {
+        id: body.id || `custom_${Date.now()}`,
+        type: body.type,
+        domain: body.domain || 'general',
+        content: body.content,
+        context: body.context || '',
+        source: body.source || '用户添加',
+        confidence: body.confidence || 0.8,
+        tags: body.tags || [],
+        ownership_type: body.ownership_type || 'shared',
+        owner_id: body.owner_id || undefined
+      };
+      
+      await retriever.addKnowledgeItem(knowledgeItem);
+      
+      return NextResponse.json({
+        success: true,
+        message: '知识项添加成功',
+        data: knowledgeItem,
+        id: knowledgeItem.id
       });
     }
     

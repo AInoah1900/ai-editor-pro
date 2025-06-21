@@ -26,6 +26,15 @@ interface RAGEnhancedResult {
   knowledge_used: string[];
   rag_confidence: number;
   fallback_used: boolean;
+  knowledge_sources?: {
+    private_count: number;
+    shared_count: number;
+    total_count: number;
+  };
+  document_sources?: {
+    private_documents: any[];
+    shared_documents: any[];
+  };
 }
 
 interface CorrectionRecord {
@@ -71,12 +80,16 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
       
       console.log('发送分析请求:', { endpoint, contentLength: documentContent.length, isUsingRAG });
       
+      const requestBody = isUsingRAG 
+        ? { content: documentContent, ownerId: 'default_user' } // 传递用户ID，实际应用中应从认证系统获取
+        : { content: documentContent };
+      
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content: documentContent }),
+        body: JSON.stringify(requestBody),
       });
 
       console.log('API响应状态:', response.status, response.statusText);
@@ -96,6 +109,22 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
         
         if (isUsingRAG && result.domain_info) {
           setRagResults(result);
+          
+          // 显示多知识库使用情况
+          if (result.knowledge_sources) {
+            console.log('知识库使用统计:', {
+              专属知识库: result.knowledge_sources.private_count,
+              共享知识库: result.knowledge_sources.shared_count,
+              总计: result.knowledge_sources.total_count
+            });
+          }
+          
+          if (result.document_sources) {
+            console.log('文档来源统计:', {
+              专属文档: result.document_sources.private_documents?.length || 0,
+              共享文档: result.document_sources.shared_documents?.length || 0
+            });
+          }
         }
         
         if (result.errors && Array.isArray(result.errors)) {
@@ -335,6 +364,28 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
 
   // 渲染带有内联纠错的文档内容
   const renderDocumentWithInlineCorrections = () => {
+    // 添加调试信息
+    console.log('渲染文档内容:', { 
+      documentContentLength: documentContent?.length || 0, 
+      errorsCount: errors.length,
+      hasContent: !!documentContent 
+    });
+
+    // 如果没有文档内容，显示提示
+    if (!documentContent || documentContent.trim().length === 0) {
+      return (
+        <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="text-center">
+            <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-lg font-medium mb-2">文档内容为空</p>
+            <p className="text-sm">请上传文档或检查文档是否正确加载</p>
+          </div>
+        </div>
+      );
+    }
+
     if (errors.length === 0) {
       return <div className="whitespace-pre-wrap leading-relaxed">{documentContent}</div>;
     }
@@ -529,8 +580,19 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
   }, [analyzeDocumentWithRAG]);
 
   useEffect(() => {
+    console.log('Content prop changed:', { 
+      contentLength: content?.length || 0, 
+      hasContent: !!content,
+      currentDocumentContentLength: documentContent?.length || 0 
+    });
+    
     if (content && content.trim().length > 0) {
       setDocumentContent(content);
+      // 清除之前的错误和分析结果
+      setErrors([]);
+      setRagResults(null);
+      setCorrectionRecords([]);
+      
       // 延迟1秒后自动分析，避免频繁调用
       const timer = setTimeout(() => {
         performAutoAnalysis();
@@ -539,8 +601,22 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
       return () => {
         clearTimeout(timer);
       };
+    } else {
+      // 如果content为空，清空所有状态
+      setDocumentContent('');
+      setErrors([]);
+      setRagResults(null);
+      setCorrectionRecords([]);
     }
   }, [content, performAutoAnalysis]);
+
+  // 监听documentContent变化，用于调试
+  useEffect(() => {
+    console.log('DocumentContent state updated:', {
+      length: documentContent?.length || 0,
+      preview: documentContent?.substring(0, 100) || 'empty'
+    });
+  }, [documentContent]);
 
   const stats = getErrorStats();
   const categories = getCategories();
@@ -621,11 +697,11 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                 <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                <span className="font-medium text-blue-800">AI分析</span>
+                <span className="font-medium text-blue-800">RAG智能分析</span>
               </div>
               
               <div className="flex-1">
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-4 mb-2">
                   <div>
                     <span className="text-blue-700">检测领域: </span>
                     <span className="font-medium text-blue-900">{ragResults.domain_info.domain}</span>
@@ -633,15 +709,66 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                   </div>
                   
                   <div>
-                    <span className="text-blue-700">知识库应用: </span>
-                    <span className="font-medium text-blue-900">{ragResults.knowledge_used.length}条</span>
-                  </div>
-                  
-                  <div>
                     <span className="text-blue-700">RAG置信度: </span>
                     <span className="font-medium text-blue-900">{(ragResults.rag_confidence * 100).toFixed(0)}%</span>
                   </div>
+                  
+                  {ragResults.fallback_used && (
+                    <div className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">
+                      本地分析
+                    </div>
+                  )}
                 </div>
+                
+                {/* 多知识库统计信息 */}
+                {ragResults.knowledge_sources && (
+                  <div className="flex items-center space-x-4 mb-2">
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <span className="text-purple-700 text-xs">专属知识库: </span>
+                      <span className="font-medium text-purple-900 text-xs">{ragResults.knowledge_sources.private_count}条</span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                      </svg>
+                      <span className="text-green-700 text-xs">共享知识库: </span>
+                      <span className="font-medium text-green-900 text-xs">{ragResults.knowledge_sources.shared_count}条</span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      <span className="text-blue-700 text-xs">总计应用: </span>
+                      <span className="font-medium text-blue-900 text-xs">{ragResults.knowledge_sources.total_count}条</span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* 文档来源统计 */}
+                {ragResults.document_sources && (ragResults.document_sources.private_documents?.length > 0 || ragResults.document_sources.shared_documents?.length > 0) && (
+                  <div className="flex items-center space-x-4 mb-2">
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span className="text-purple-700 text-xs">专属文档: </span>
+                      <span className="font-medium text-purple-900 text-xs">{ragResults.document_sources.private_documents?.length || 0}个</span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span className="text-green-700 text-xs">共享文档: </span>
+                      <span className="font-medium text-green-900 text-xs">{ragResults.document_sources.shared_documents?.length || 0}个</span>
+                    </div>
+                  </div>
+                )}
                 
                 {ragResults.domain_info.keywords.length > 0 && (
                   <div className="mt-1">

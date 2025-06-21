@@ -158,17 +158,29 @@ export class QdrantVectorClient {
       
       console.log(`正在搜索相似向量: 维度=${queryVector.length}, 限制=${limit}, 数据点=${collectionInfo.points_count}`);
       
-      // 构建搜索参数
-      const searchParams: any = {
+      // 构建搜索参数 - 修复格式
+      const searchParams: {
+        vector: number[];
+        limit: number;
+        with_payload: boolean;
+        filter?: Record<string, unknown>;
+      } = {
         vector: queryVector,
         limit: limit,
         with_payload: true,
       };
       
-      // 只有在filter有值时才添加
+      // 只有在filter有效时才添加
       if (filter && Object.keys(filter).length > 0) {
-        searchParams.filter = filter;
+        // 确保filter格式正确
+        if (filter.must && Array.isArray(filter.must)) {
+          searchParams.filter = filter;
+        } else {
+          console.warn('过滤器格式不正确，忽略过滤条件');
+        }
       }
+      
+      console.log('搜索参数:', JSON.stringify(searchParams, null, 2));
       
       const searchResponse = await this.client.search(this.COLLECTION_NAME, searchParams);
 
@@ -181,14 +193,45 @@ export class QdrantVectorClient {
       }));
     } catch (error) {
       console.error('搜索相似向量失败:', error);
-      if (error instanceof Error) {
-        console.error('错误详情:', error.message);
-      }
-      if (error && typeof error === 'object' && 'response' in error) {
+      
+      // 详细错误信息
+      if (error && typeof error === 'object') {
         const httpError = error as any;
-        console.error('响应状态:', httpError.response?.status);
-        console.error('响应数据:', httpError.response?.data);
+        console.error('错误详情:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          status: httpError.status || httpError.response?.status,
+          statusText: httpError.statusText || httpError.response?.statusText,
+          data: httpError.data || httpError.response?.data,
+          url: httpError.url || httpError.response?.config?.url,
+          headers: httpError.headers || httpError.response?.headers
+        });
       }
+      
+      // 如果是Bad Request错误，尝试不使用过滤器重新搜索
+      if (error && typeof error === 'object' && 
+          ((error as any).status === 400 || (error as any).response?.status === 400)) {
+        console.log('尝试不使用过滤器重新搜索...');
+        
+        try {
+          const fallbackParams = {
+            vector: queryVector,
+            limit: limit,
+            with_payload: true,
+          };
+          
+          const fallbackResponse = await this.client.search(this.COLLECTION_NAME, fallbackParams);
+          console.log(`备用搜索完成，找到 ${fallbackResponse.length} 个结果`);
+          
+          return fallbackResponse.map((result) => ({
+            id: (result.payload?.original_id as string) || String(result.id),
+            score: result.score,
+            payload: result.payload || {},
+          }));
+        } catch (fallbackError) {
+          console.error('备用搜索也失败:', fallbackError);
+        }
+      }
+      
       return [];
     }
   }

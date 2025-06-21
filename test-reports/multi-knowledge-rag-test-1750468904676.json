@@ -1,0 +1,137 @@
+{
+  "timestamp": "2025-06-21T01:21:44.673Z",
+  "test_config": {
+    "baseUrl": "http://localhost:3000",
+    "testDocument": "人工智能技术在医学诊断中的应用前景广阔。机器学习算法能够通过分析大量的医疗数据，\n    提高疾病诊断的准确性。深度学习模型在医学影像分析方面表现尤为突出，能够识别细微的\n    病理变化。然而，AI系统的黑盒特性使得其决策过程缺乏透明度，这在医疗领域是一个重要\n    的伦理问题。医生和患者需要理解AI的诊断依据，以建立对技术的信任。\n    \n    此外，数据隐私和安全性也是AI医疗应用中需要重点考虑的问题。医疗数据的敏感性要求\n    严格的数据保护措施。同时，AI模型的偏见问题也不容忽视，训练数据的不平衡可能导致\n    对某些群体的诊断偏差。",
+    "ownerId": "test_user_001"
+  },
+  "results": {
+    "rag_analysis": {
+      "errors": [
+        {
+          "id": "rag_error_1750468897881_0_uijfwpbca",
+          "type": "suggestion",
+          "position": {
+            "start": 0,
+            "end": 15
+          },
+          "original": "人工智能技术在医学诊断中的应用前景广阔",
+          "suggestion": "人工智能技术在医疗诊断中的应用前景广阔",
+          "reason": "在医疗领域更常用'医疗诊断'而非'医学诊断'，以保持术语一致性",
+          "category": "术语规范"
+        },
+        {
+          "id": "rag_error_1750468897881_1_9wncnhlqk",
+          "type": "suggestion",
+          "position": {
+            "start": 16,
+            "end": 34
+          },
+          "original": "机器学习算法能够通过分析大量的医疗数据",
+          "suggestion": "机器学习算法能够通过分析海量医疗数据",
+          "reason": "'海量'比'大量的'更符合学术写作的简洁性要求",
+          "category": "表达优化"
+        },
+        {
+          "id": "rag_error_1750468897881_2_ar9ffpr2c",
+          "type": "warning",
+          "position": {
+            "start": 96,
+            "end": 106
+          },
+          "original": "AI系统的黑盒特性",
+          "suggestion": "AI系统的'黑箱'特性",
+          "reason": "在学术文献中更常用'黑箱'来描述不可解释的AI系统",
+          "category": "术语规范"
+        },
+        {
+          "id": "rag_error_1750468897881_3_p9hcyliho",
+          "type": "suggestion",
+          "position": {
+            "start": 107,
+            "end": 123
+          },
+          "original": "这在医疗领域是一个重要的伦理问题",
+          "suggestion": "这在医疗实践中是一个重要的伦理问题",
+          "reason": "'医疗实践'比'医疗领域'更具体准确",
+          "category": "术语规范"
+        },
+        {
+          "id": "rag_error_1750468897881_4_89w2zn016",
+          "type": "suggestion",
+          "position": {
+            "start": 124,
+            "end": 140
+          },
+          "original": "医生和患者需要理解AI的诊断依据",
+          "suggestion": "临床医生和患者需要理解AI辅助诊断的依据",
+          "reason": "1) '临床医生'更专业 2) 明确AI是辅助角色 3) '依据'改为'辅助诊断的依据'更准确",
+          "category": "术语规范"
+        },
+        {
+          "id": "rag_error_1750468897881_5_ygmz68mxc",
+          "type": "suggestion",
+          "position": {
+            "start": 168,
+            "end": 197
+          },
+          "original": "数据隐私和安全性也是AI医疗应用中需要重点考虑的问题",
+          "suggestion": "数据隐私保护和安全管控是AI医疗应用中的关键问题",
+          "reason": "1) '保护'和'管控'更专业 2) '关键'比'重点'更符合学术用语",
+          "category": "术语规范"
+        },
+        {
+          "id": "rag_error_1750468897881_6_jj9a84zp9",
+          "type": "suggestion",
+          "position": {
+            "start": 198,
+            "end": 219
+          },
+          "original": "医疗数据的敏感性要求严格的数据保护措施",
+          "suggestion": "医疗数据的敏感性要求实施严格的数据保护机制",
+          "reason": "'实施...机制'比'...措施'更专业规范",
+          "category": "表达优化"
+        },
+        {
+          "id": "rag_error_1750468897881_7_6e6844s1o",
+          "type": "suggestion",
+          "position": {
+            "start": 244,
+            "end": 270
+          },
+          "original": "训练数据的不平衡可能导致对某些群体的诊断偏差",
+          "suggestion": "训练数据集的不平衡可能导致对特定人群的诊断偏差",
+          "reason": "1) '数据集'比'数据'更专业 2) '特定人群'比'某些群体'更准确",
+          "category": "术语规范"
+        }
+      ],
+      "domain_info": {
+        "domain": "medical",
+        "confidence": 0.5583333333333333,
+        "keywords": [
+          "医疗",
+          "疾病",
+          "患者",
+          "诊断",
+          "医生"
+        ]
+      },
+      "knowledge_used": [],
+      "rag_confidence": 0,
+      "fallback_used": false,
+      "knowledge_sources": {
+        "private_count": 0,
+        "shared_count": 0,
+        "total_count": 0
+      },
+      "document_sources": {
+        "private_documents": [],
+        "shared_documents": []
+      }
+    },
+    "multi_knowledge_enabled": false,
+    "document_sources_enabled": false,
+    "error_detection_count": 8,
+    "knowledge_application_count": 0
+  }
+}
