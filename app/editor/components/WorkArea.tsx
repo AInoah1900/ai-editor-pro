@@ -456,11 +456,20 @@ export default function WorkArea({
                           ? 'bg-purple-600 hover:bg-purple-700' 
                           : 'bg-green-600 hover:bg-green-700'
                       }`}
-                      title={doc.file_type.toLowerCase() === 'docx' ? '支持DOCX格式预览' : ''}
+                      title={
+                        doc.file_type.toLowerCase() === 'docx' ? '支持DOCX格式预览' :
+                        doc.file_type.toLowerCase() === 'pdf' ? '支持PDF格式预览' :
+                        ''
+                      }
                     >
                       {doc.file_type.toLowerCase() === 'docx' && (
                         <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      )}
+                      {doc.file_type.toLowerCase() === 'pdf' && (
+                        <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
                       )}
                       查看文档
@@ -606,14 +615,14 @@ export default function WorkArea({
   };
 
   // 下载文档
-  const handleDownloadDocument = (document: FileMetadata) => {
-    const url = `/api/documents/${document.vector_id}?action=download`;
-    const link = document.createElement('a');
+  const handleDownloadDocument = (fileMetadata: FileMetadata) => {
+    const url = `/api/documents/${fileMetadata.vector_id}?action=download`;
+    const link = window.document.createElement('a');
     link.href = url;
-    link.download = document.filename;
-    document.body.appendChild(link);
+    link.download = fileMetadata.filename;
+    window.document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    window.document.body.removeChild(link);
   };
 
   // 格式化文件大小
@@ -755,13 +764,55 @@ export default function WorkArea({
                       <div>
                         <div className="mb-4 pb-4 border-b border-gray-200">
                           <div className="flex items-center justify-between text-sm text-gray-500">
-                            <span>文档内容预览</span>
+                            <div className="flex items-center space-x-2">
+                              <span>文档内容预览</span>
+                              {currentDocument.file_type.toLowerCase() === 'pdf' && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-100 text-red-800">
+                                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                  </svg>
+                                  PDF
+                                </span>
+                              )}
+                              {currentDocument.file_type.toLowerCase() === 'docx' && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                  DOCX
+                                </span>
+                              )}
+                            </div>
                             <span>上传时间: {formatDate(currentDocument.upload_time)}</span>
                           </div>
                         </div>
-                        <pre className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed font-sans">
-                          {uploadedDocument}
-                        </pre>
+                        <div className={`${
+                          currentDocument.file_type.toLowerCase() === 'pdf' 
+                            ? 'bg-gray-50 border border-gray-200 rounded-lg p-4' 
+                            : ''
+                        }`}>
+                          <pre className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed font-sans">
+                            {uploadedDocument}
+                          </pre>
+                          {currentDocument.file_type.toLowerCase() === 'pdf' && (
+                            <div className="mt-6 pt-4 border-t border-gray-200">
+                              <div className="flex items-center justify-center space-x-4">
+                                <button
+                                  onClick={() => handleDownloadDocument(currentDocument)}
+                                  className="inline-flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md"
+                                >
+                                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                  下载PDF文档
+                                </button>
+                                <div className="text-sm text-gray-500">
+                                  建议使用专业PDF阅读器打开
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
