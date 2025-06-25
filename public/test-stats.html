@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知识库统计测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .loading {
+            color: #666;
+        }
+        .error {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <h1>知识库统计测试</h1>
+    
+    <div class="card">
+        <h2>API测试</h2>
+        <button onclick="testStats()">获取统计数据</button>
+        <button onclick="testKnowledge()">获取知识项</button>
+        <div id="status" class="loading">点击按钮开始测试</div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="card">
+            <h3>📊 总体统计</h3>
+            <div id="total-stats">
+                <div class="stat-item">
+                    <span>总知识项:</span>
+                    <span id="total-knowledge">-</span>
+                </div>
+                <div class="stat-item">
+                    <span>总文件数:</span>
+                    <span id="total-files">-</span>
+                </div>
+                <div class="stat-item">
+                    <span>向量点数:</span>
+                    <span id="vector-points">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>🔬 按领域分布</h3>
+            <div id="domain-stats">
+                <div class="loading">暂无数据</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>📚 按类型分布</h3>
+            <div id="type-stats">
+                <div class="loading">暂无数据</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>🔍 调试信息</h3>
+        <pre id="debug-info">等待测试...</pre>
+    </div>
+
+    <script>
+        async function testStats() {
+            const status = document.getElementById('status');
+            const debug = document.getElementById('debug-info');
+            
+            status.textContent = '正在获取统计数据...';
+            status.className = 'loading';
+            
+            try {
+                // 获取基础统计
+                const statsResponse = await fetch('/api/knowledge-base?action=getLibraryStats');
+                const statsResult = await statsResponse.json();
+                
+                // 获取知识项
+                const knowledgeResponse = await fetch('/api/knowledge-base?query=&limit=100');
+                const knowledgeResult = await knowledgeResponse.json();
+                
+                if (!statsResult.success || !knowledgeResult.success) {
+                    throw new Error('API调用失败');
+                }
+                
+                const knowledgeItems = knowledgeResult.knowledge_items || [];
+                const domains = {};
+                const types = {};
+                
+                knowledgeItems.forEach(item => {
+                    if (item.domain) {
+                        domains[item.domain] = (domains[item.domain] || 0) + 1;
+                    }
+                    if (item.type) {
+                        types[item.type] = (types[item.type] || 0) + 1;
+                    }
+                });
+                
+                // 更新显示
+                document.getElementById('total-knowledge').textContent = knowledgeItems.length;
+                document.getElementById('total-files').textContent = statsResult.stats.total_private + statsResult.stats.total_shared;
+                document.getElementById('vector-points').textContent = knowledgeItems.length;
+                
+                // 更新领域分布
+                const domainContainer = document.getElementById('domain-stats');
+                domainContainer.innerHTML = '';
+                Object.entries(domains).forEach(([domain, count]) => {
+                    const item = document.createElement('div');
+                    item.className = 'stat-item';
+                    item.innerHTML = `<span>${domain}:</span><span>${count}</span>`;
+                    domainContainer.appendChild(item);
+                });
+                
+                // 更新类型分布
+                const typeContainer = document.getElementById('type-stats');
+                typeContainer.innerHTML = '';
+                Object.entries(types).forEach(([type, count]) => {
+                    const item = document.createElement('div');
+                    item.className = 'stat-item';
+                    item.innerHTML = `<span>${type}:</span><span>${count}</span>`;
+                    typeContainer.appendChild(item);
+                });
+                
+                status.textContent = '✅ 统计数据加载成功！';
+                status.className = '';
+                
+                debug.textContent = JSON.stringify({
+                    baseStats: statsResult,
+                    knowledgeCount: knowledgeItems.length,
+                    domains,
+                    types
+                }, null, 2);
+                
+            } catch (error) {
+                status.textContent = `❌ 错误: ${error.message}`;
+                status.className = 'error';
+                debug.textContent = error.stack;
+            }
+        }
+        
+        async function testKnowledge() {
+            const debug = document.getElementById('debug-info');
+            
+            try {
+                const response = await fetch('/api/knowledge-base?query=test&limit=5');
+                const result = await response.json();
+                
+                debug.textContent = JSON.stringify(result, null, 2);
+                
+            } catch (error) {
+                debug.textContent = error.stack;
+            }
+        }
+        
+        // 页面加载时自动测试
+        window.onload = () => {
+            testStats();
+        };
+    </script>
+</body>
+</html> 

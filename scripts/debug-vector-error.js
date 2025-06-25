@@ -15,7 +15,7 @@ async function debugVectorError() {
     console.log('\n2. 创建测试集合...');
     try {
       await client.createCollection('debug-test', {
-        vectors: { size: 1024, distance: 'Cosine' }
+        vectors: { size: 4096, distance: 'Cosine' }
       });
       console.log('✅ 集合创建成功');
     } catch (error) {
@@ -30,7 +30,7 @@ async function debugVectorError() {
     
     // 测试1: 基本向量
     try {
-      const basicVector = new Array(1024).fill(0.1);
+      const basicVector = new Array(4096).fill(0.1);
       await client.upsert('debug-test', {
         points: [{
           id: 'test1',
@@ -48,7 +48,7 @@ async function debugVectorError() {
     
     // 测试2: 随机向量
     try {
-      const randomVector = new Array(1024).fill(0).map(() => Math.random());
+      const randomVector = new Array(4096).fill(0).map(() => Math.random());
       await client.upsert('debug-test', {
         points: [{
           id: 'test2',
@@ -66,7 +66,7 @@ async function debugVectorError() {
     
     // 测试3: 复杂 payload
     try {
-      const complexVector = new Array(1024).fill(0.5);
+      const complexVector = new Array(4096).fill(0.5);
       await client.upsert('debug-test', {
         points: [{
           id: 'test3',
@@ -90,7 +90,7 @@ async function debugVectorError() {
     
     // 测试4: 字符串 ID
     try {
-      const stringVector = new Array(1024).fill(0.3);
+      const stringVector = new Array(4096).fill(0.3);
       await client.upsert('debug-test', {
         points: [{
           id: 'string_id_test',
@@ -108,7 +108,7 @@ async function debugVectorError() {
     
     // 测试5: 数字 ID
     try {
-      const numberVector = new Array(1024).fill(0.7);
+      const numberVector = new Array(4096).fill(0.7);
       await client.upsert('debug-test', {
         points: [{
           id: 12345,

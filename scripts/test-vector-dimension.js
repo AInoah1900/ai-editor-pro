@@ -35,10 +35,10 @@ async function testVectorDimension() {
         console.log(`   🎯 向量示例: [${vector.slice(0, 5).map(v => v.toFixed(4)).join(', ')}...]`);
         
         // 验证维度
-        if (vector.length === 1024) {
-          console.log(`   ✅ 维度正确: 1024`);
+        if (vector.length === 4096) {
+          console.log(`   ✅ 维度正确: 4096`);
         } else {
-          console.log(`   ❌ 维度错误: 期望1024，实际${vector.length}`);
+          console.log(`   ❌ 维度错误: 期望4096，实际${vector.length}`);
         }
         
         // 验证向量是否标准化
@@ -74,7 +74,7 @@ function patchKnowledgeRetriever() {
   };
   
   NewKnowledgeRetriever.prototype.generateAdvancedLocalEmbedding = function(text) {
-    const vector = new Array(1024).fill(0);
+    const vector = new Array(4096).fill(0);
     
     // 预处理文本
     const cleanText = this.preprocessText(text);

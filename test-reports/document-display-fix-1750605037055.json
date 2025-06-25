@@ -1,0 +1,83 @@
+[
+  {
+    "name": "短文档 - 可能有位置错误",
+    "documentLength": 20,
+    "totalErrors": 2,
+    "validErrors": 2,
+    "fixedErrors": 2,
+    "positionIssues": [
+      {
+        "index": 1,
+        "original": "[0-22]",
+        "fixed": "[0-20]"
+      },
+      {
+        "index": 2,
+        "original": "[12-22]",
+        "fixed": "[12-20]"
+      }
+    ],
+    "frontendResult": {
+      "partsCount": 2,
+      "hasCompleteContent": true,
+      "totalContentLength": 28,
+      "expectedLength": 20,
+      "coverage": "140.0%",
+      "parts": [
+        "[warning标注: 20字符]",
+        "[suggestion标注: 8字符]"
+      ]
+    },
+    "status": "✅ 通过"
+  },
+  {
+    "name": "中等长度文档 - 正常情况",
+    "documentLength": 94,
+    "totalErrors": 4,
+    "validErrors": 4,
+    "fixedErrors": 1,
+    "positionIssues": [
+      {
+        "index": 4,
+        "original": "[90-100]",
+        "fixed": "[90-94]"
+      }
+    ],
+    "frontendResult": {
+      "partsCount": 7,
+      "hasCompleteContent": true,
+      "totalContentLength": 95,
+      "expectedLength": 94,
+      "coverage": "101.1%",
+      "parts": [
+        "[warning标注: 9字符]",
+        "[间隙文本: 29字符]",
+        "[suggestion标注: 12字符]",
+        "[间隙文本: 26字符]",
+        "[suggestion标注: 14字符]",
+        "[间隙文本: 1字符]",
+        "[suggestion标注: 4字符]"
+      ]
+    },
+    "status": "✅ 通过"
+  },
+  {
+    "name": "长文档 - 复杂情况",
+    "documentLength": 359,
+    "totalErrors": 1,
+    "validErrors": 1,
+    "fixedErrors": 0,
+    "positionIssues": [],
+    "frontendResult": {
+      "partsCount": 1,
+      "hasCompleteContent": false,
+      "totalContentLength": 10,
+      "expectedLength": 359,
+      "coverage": "2.8%",
+      "parts": [
+        "[suggestion标注: 10字符]"
+      ]
+    },
+    "status": "❌ 失败"
+  }
+]

@@ -59,11 +59,11 @@ async function finalTest() {
     try {
       // 创建测试集合
       await client.createCollection('test-final', {
-        vectors: { size: 1024, distance: 'Cosine' }
+        vectors: { size: 4096, distance: 'Cosine' }
       });
       
       // 添加测试向量
-      const testVector = new Array(1024).fill(0).map(() => Math.random());
+      const testVector = new Array(4096).fill(0).map(() => Math.random());
       await client.upsert('test-final', {
         points: [{
           id: 'test_point',

@@ -1,0 +1,87 @@
+{
+  "timestamp": "2025-06-23T06:21:01.233Z",
+  "tests": [
+    {
+      "name": ".env.local文件存在性检查",
+      "status": "PASSED",
+      "details": "文件大小: 574 字符",
+      "error": null,
+      "timestamp": "2025-06-23T06:21:01.239Z"
+    },
+    {
+      "name": "必需配置项检查",
+      "status": "PASSED",
+      "details": "所有5个配置项都存在",
+      "error": null,
+      "timestamp": "2025-06-23T06:21:01.240Z"
+    },
+    {
+      "name": "本地API端点配置",
+      "status": "PASSED",
+      "details": "本地API端点配置正确: http://localhost:11434/api",
+      "error": null,
+      "timestamp": "2025-06-23T06:21:01.240Z"
+    },
+    {
+      "name": "本地模型配置",
+      "status": "PASSED",
+      "details": "本地模型配置正确: deepseek-r1:8b",
+      "error": null,
+      "timestamp": "2025-06-23T06:21:01.240Z"
+    },
+    {
+      "name": "云端API端点配置",
+      "status": "PASSED",
+      "details": "云端API端点配置正确: https://api.deepseek.com/v1",
+      "error": null,
+      "timestamp": "2025-06-23T06:21:01.240Z"
+    },
+    {
+      "name": "云端模型配置",
+      "status": "PASSED",
+      "details": "云端模型配置正确: deepseek-chat",
+      "error": null,
+      "timestamp": "2025-06-23T06:21:01.240Z"
+    },
+    {
+      "name": "配置文件本地API设置",
+      "status": "PASSED",
+      "details": "本地API默认配置正确",
+      "error": null,
+      "timestamp": "2025-06-23T06:21:01.241Z"
+    },
+    {
+      "name": "配置文件云端API设置",
+      "status": "PASSED",
+      "details": "云端API默认配置正确",
+      "error": null,
+      "timestamp": "2025-06-23T06:21:01.241Z"
+    },
+    {
+      "name": "本地API连接测试",
+      "status": "PASSED",
+      "details": "连接成功，可用模型: deepseek-r1:8b",
+      "error": null,
+      "timestamp": "2025-06-23T06:21:01.284Z"
+    },
+    {
+      "name": "目标模型可用性检查",
+      "status": "PASSED",
+      "details": "deepseek-r1:8b 模型可用",
+      "error": null,
+      "timestamp": "2025-06-23T06:21:01.284Z"
+    },
+    {
+      "name": "配置API端点测试",
+      "status": "FAILED",
+      "details": "需要启动开发服务器才能测试此功能",
+      "error": "fetch failed",
+      "timestamp": "2025-06-23T06:21:01.286Z"
+    }
+  ],
+  "summary": {
+    "total": 11,
+    "passed": 10,
+    "failed": 1
+  }
+}

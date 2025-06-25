@@ -1,0 +1,18 @@
+{
+  "timestamp": "2025-06-24T08:30:17.077Z",
+  "testName": "DeepSeek-R1响应解析优化测试",
+  "results": {
+    "unitTests": {
+      "passed": false,
+      "description": "parseDeepSeekR1Response函数单元测试"
+    },
+    "apiTests": {
+      "passed": true,
+      "description": "实际API调用集成测试"
+    }
+  },
+  "summary": {
+    "allTestsPassed": false,
+    "optimizationStatus": "需要进一步调整"
+  }
+}

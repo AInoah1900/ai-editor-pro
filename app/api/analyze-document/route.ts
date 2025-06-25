@@ -18,117 +18,156 @@ interface ErrorItem {
   category: string;
 }
 
+/**
+ * 处理DeepSeek-R1模型的响应，提取JSON内容
+ * DeepSeek-R1会返回包含<think>标签的推理过程，需要特殊处理
+ */
+function parseDeepSeekR1Response(response: string): { errors: any[] } {
+  try {
+    // 1. 首先尝试直接解析（如果没有think标签）
+    const directParse = response.replace(/```json\n?|\n?```/g, '').trim();
+    if (directParse.startsWith('{') && directParse.endsWith('}')) {
+      return JSON.parse(directParse);
+    }
+
+    // 2. 处理包含<think>标签的响应
+    // 移除<think>...</think>标签及其内容
+    const cleanedResponse = response.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    
+    // 3. 提取JSON部分 - 查找花括号包围的内容
+    const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const jsonStr = jsonMatch[0].replace(/```json\n?|\n?```/g, '').trim();
+      return JSON.parse(jsonStr);
+    }
+
+    // 4. 如果还是找不到JSON，尝试查找errors数组
+    const errorsMatch = cleanedResponse.match(/"errors"\s*:\s*\[[\s\S]*?\]/);
+    if (errorsMatch) {
+      const errorsStr = `{${errorsMatch[0]}}`;
+      const parsed = JSON.parse(errorsStr);
+      // 确保返回的是正确的格式
+      return parsed;
+    }
+
+    // 5. 最后尝试从整个响应中提取任何有效的JSON片段
+    const lines = cleanedResponse.split('\n');
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith('{') && trimmedLine.endsWith('}')) {
+        try {
+          return JSON.parse(trimmedLine);
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    throw new Error('无法从响应中提取有效的JSON数据');
+  } catch (error) {
+    console.error('DeepSeek-R1响应解析失败:', error);
+    console.log('原始响应预览:', response.substring(0, 500) + '...');
+    throw error;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // 验证API密钥是否可用
-    if (!DEEPSEEK_API_KEY) {
-      console.error('DeepSeek API密钥未配置，使用备选数据');
-      const { content } = await request.json();
+    const { content } = await request.json();
+
+    if (!content || content.trim().length === 0) {
       return NextResponse.json({
-        errors: generateFallbackErrors(content || ''),
-        message: 'API密钥未配置，使用本地分析'
+        errors: [{
+          id: `empty_content_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'error',
+          position: { start: 0, end: 0 },
+          original: '空文档',
+          suggestion: '请提供需要校对的文档内容',
+          reason: '文档内容为空',
+          category: '内容完整性'
+        }]
       });
     }
 
-    const { content } = await request.json();
+    // 优化的提示词 - 根据DeepSeek API文档要求，必须包含"json"字样和JSON格式样例
+    const prompt = `请作为专业期刊编辑，对文档进行精确校对分析，并严格按照JSON格式返回结果。
 
-    if (!content) {
-      return NextResponse.json({ error: '文档内容不能为空' }, { status: 400 });
-    }
+**检查重点**：
+- 重复词汇（如"研究研究"→"研究"）
+- 重复标点（如"？。"→"？"）  
+- 语法错误和用词不当
+- 学术写作规范问题
 
-    // 构建DeepSeek API请求
-    const prompt = `
-请作为一个专业的期刊编辑，对以下文档进行精确的校对和分析。
-
-重要要求：
-1. 只标注具体有问题的词汇或短语，不要标注整个句子
-2. 对于重复词汇（如"研究研究"、"的的"），只标注重复的部分
-3. 对于标点错误，只标注错误的标点符号
-4. 确保original字段包含的是确切需要修改的文字
-
-请检查以下方面的问题：
-1. 重复词汇（如"研究研究"→"研究"、"的的"→"的"）
-2. 重复标点符号（如"？。"→"？"）
-3. 语法错误和用词不当
-4. 学术写作规范问题
-
-对于发现的每个问题，请按照以下JSON格式返回：
+**JSON输出格式示例**：
 {
   "errors": [
     {
-      "id": "唯一标识符",
-      "type": "error|warning|suggestion",
-      "original": "确切的错误文字（如'研究研究'）",
-      "suggestion": "修改建议（如'研究'）",
-      "reason": "错误原因说明",
+      "id": "error_1",
+      "type": "error",
+      "original": "确切错误文字",
+      "suggestion": "修改建议", 
+      "reason": "简短原因",
       "category": "错误类别"
     }
   ]
 }
 
-错误类型说明：
-- error: 确定的错误，必须修改（如重复词汇、明显语法错误）
-- warning: 疑似错误，建议修改（如标点使用、表达方式）
-- suggestion: 优化建议，可以改进（如长句分解、表达优化）
+**错误类型说明**：
+- error: 确定错误（重复词汇、语法错误）
+- warning: 疑似错误（标点、表达）
+- suggestion: 优化建议（长句、表达优化）
 
-示例：
-文本："基于超音速数值仿真下多脉冲约束弹体的修正策略研究研究综述"
-应该标注："研究研究" → "研究"，而不是整个句子
-
-请分析以下文档：
-
+**待分析文档**：
 ${content}
 
-请只返回JSON格式的结果，确保original字段精确匹配文档中的错误文字。
-`;
+请严格按照上述JSON格式返回分析结果，确保输出是有效的JSON字符串。`;
 
-    // 使用新的DeepSeek客户端
-    const { createDeepSeekClient } = await import('@/lib/deepseek/deepseek-client');
-    const deepSeekClient = createDeepSeekClient(DEEPSEEK_API_KEY, {
-      timeout: 20000, // 20秒超时
-      maxRetries: 2   // 减少重试次数
-    });
+    // 使用双DeepSeek客户端
+    const { getDualDeepSeekClient } = await import('@/lib/deepseek/deepseek-dual-client');
+    const dualClient = getDualDeepSeekClient(true);
     
-    console.log('正在调用DeepSeek API进行基础分析...');
-    const response = await deepSeekClient.createChatCompletion({
-      model: 'deepseek-chat',
+    console.log('🔍 调用DeepSeek API进行文档分析...');
+    const response = await dualClient.createChatCompletion({
       messages: [
         {
           role: 'system',
-          content: '你是一个专业的期刊编辑和校对专家，擅长发现文档中的各种错误并提供准确的修改建议。请严格按照要求的JSON格式返回结果。'
+          content: '你是专业期刊编辑。请严格按照JSON格式返回文档校对结果。输出必须是有效的JSON字符串，包含errors数组。'
         },
         {
           role: 'user',
           content: prompt
         }
       ],
-      temperature: 0.1,
-      max_tokens: 4000,
-      stream: false
+      temperature: 0.3, // 手动设置为0.3，降低随机性
+      max_tokens: 32000, // 手动设置为32000，避免截断输出
+      stream: false,
+      response_format: { type: 'json_object' } // 根据DeepSeek API文档要求，启用JSON模式
     });
 
     const aiResponse = response.choices[0]?.message?.content;
 
     if (!aiResponse) {
+      console.log('⚠️ API返回空响应，使用本地分析');
       return NextResponse.json({
         errors: generateFallbackErrors(content)
       });
     }
 
     try {
-      // 尝试解析AI返回的JSON
-      const cleanedResponse = aiResponse.replace(/```json\n?|\n?```/g, '').trim();
-      const parsedResult = JSON.parse(cleanedResponse);
+      console.log('📝 AI响应长度:', aiResponse.length);
+      console.log('🔍 响应预览:', aiResponse.substring(0, 200) + '...');
+      
+      // 使用专门的DeepSeek-R1响应解析函数
+      const parsedResult = parseDeepSeekR1Response(aiResponse);
       
       // 验证返回的数据格式
       if (parsedResult.errors && Array.isArray(parsedResult.errors)) {
-        // 为每个错误添加唯一ID和位置信息（如果没有的话）
+        // 为每个错误添加唯一ID和位置信息
         const errorsWithIds = parsedResult.errors.map((error: Partial<ErrorItem>, index: number) => {
-          // 计算错误在文档中的位置
           const position = calculateErrorPosition(content, error.original || '', index);
           
           return {
-            id: `ai_error_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
+            id: error.id || `ai_error_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
             type: error.type || 'warning',
             position: error.position || position,
             original: error.original || '未知错误',
@@ -138,30 +177,33 @@ ${content}
           };
         });
 
+        console.log(`✅ 成功解析AI响应，发现 ${errorsWithIds.length} 个问题`);
         return NextResponse.json({
           errors: errorsWithIds,
           message: '文档分析完成'
         });
       } else {
-        throw new Error('Invalid response format');
+        throw new Error('响应格式无效：缺少errors数组');
       }
     } catch (parseError) {
-      console.error('解析AI响应失败:', parseError);
-      console.log('AI原始响应:', aiResponse);
+      console.error('❌ AI响应解析失败:', parseError);
+      console.log('📄 完整AI响应:', aiResponse);
       
-      // 返回模拟数据
+      // 使用本地分析作为备选
+      console.log('🔄 切换到本地分析模式...');
       return NextResponse.json({
-        errors: generateFallbackErrors(content)
+        errors: generateFallbackErrors(content),
+        message: '使用本地分析完成文档校对'
       });
     }
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('基础API调用失败:', errorMessage);
+    console.error('💥 API调用失败:', errorMessage);
     
-    // 根据错误类型提供更详细的日志
+    // 根据错误类型提供详细日志
     if (errorMessage.includes('timeout') || errorMessage.includes('超时')) {
-      console.log('📡 DeepSeek API超时，使用本地分析');
+      console.log('⏰ DeepSeek API超时，使用本地分析');
     } else if (errorMessage.includes('401') || errorMessage.includes('403')) {
       console.log('🔑 API密钥验证失败，使用本地分析');
     } else if (errorMessage.includes('429')) {
@@ -183,7 +225,6 @@ ${content}
     const fallbackErrors = generateFallbackErrors(fallbackContent);
     console.log(`✅ 本地分析完成，发现 ${fallbackErrors.length} 个问题`);
     
-    // 返回模拟数据作为备选
     return NextResponse.json({
       errors: fallbackErrors,
       message: '使用本地分析完成文档校对'

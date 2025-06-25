@@ -20,7 +20,7 @@ async function testQdrantDirect() {
     try {
       await client.createCollection('test-collection', {
         vectors: {
-          size: 1024,
+          size: 4096,
           distance: 'Cosine',
         },
       });
@@ -39,7 +39,7 @@ async function testQdrantDirect() {
 
     console.log('\n4. 测试添加向量点...');
     try {
-      const testVector = new Array(1024).fill(0).map(() => Math.random());
+      const testVector = new Array(4096).fill(0).map(() => Math.random());
       await client.upsert('test-collection', {
         points: [
           {
@@ -56,7 +56,7 @@ async function testQdrantDirect() {
 
     console.log('\n5. 测试搜索向量...');
     try {
-      const queryVector = new Array(1024).fill(0).map(() => Math.random());
+      const queryVector = new Array(4096).fill(0).map(() => Math.random());
       const searchResult = await client.search('test-collection', {
         vector: queryVector,
         limit: 5,

@@ -1,0 +1,80 @@
+{
+  "timestamp": "2025-06-24T07:48:09.457Z",
+  "tests": [
+    {
+      "name": "API健康检查",
+      "status": "PASS",
+      "details": {
+        "cloud_available": true,
+        "local_available": true,
+        "current_provider": "local"
+      },
+      "response_time": 1750751292308
+    },
+    {
+      "name": "云端API连接测试",
+      "status": "PASS",
+      "details": {
+        "message": "云端API连接测试成功",
+        "endpoint_format": "/v1/chat/completions",
+        "openai_compatible": true
+      },
+      "response_time": 1750751292536
+    },
+    {
+      "name": "本地API连接测试",
+      "status": "PASS",
+      "details": {
+        "message": "本地API连接测试成功",
+        "endpoint_format": "/v1/chat/completions",
+        "openai_compatible": true
+      },
+      "response_time": 1750751293066
+    },
+    {
+      "name": "API配置状态检查",
+      "status": "PASS",
+      "details": {
+        "current_provider": "local",
+        "cloud_status": {
+          "available": true,
+          "configured": true
+        },
+        "local_status": {
+          "available": true,
+          "configured": true
+        },
+        "recommendations": []
+      },
+      "response_time": 1750751293073
+    },
+    {
+      "name": "文档分析功能测试",
+      "status": "PASS",
+      "details": {
+        "errors_found": 1,
+        "endpoint_used": "optimized /v1/chat/completions",
+        "sample_errors": [
+          {
+            "id": "fallback_common_35_1750751458232_1pc51yveu",
+            "type": "error",
+            "position": {
+              "start": 35,
+              "end": 37
+            },
+            "original": "的的",
+            "suggestion": "的",
+            "reason": "重复使用\"的\"字",
+            "category": "语法错误"
+          }
+        ]
+      },
+      "response_time": 1750751458239
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0
+  }
+}

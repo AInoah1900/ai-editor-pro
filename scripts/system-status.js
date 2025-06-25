@@ -64,11 +64,11 @@ async function checkSystemStatus() {
     try {
       // 创建临时测试集合
       await client.createCollection('status-test', {
-        vectors: { size: 1024, distance: 'Cosine' }
+        vectors: { size: 4096, distance: 'Cosine' }
       });
       
       // 测试添加向量
-      const testVector = new Array(1024).fill(0.1);
+      const testVector = new Array(4096).fill(0.1);
       await client.upsert('status-test', {
         points: [{
           id: 1,

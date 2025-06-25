@@ -1,5 +1,6 @@
 import { QdrantVectorClient } from '../vector/qdrant-client';
 import { DatabaseModels, KnowledgeItem, FileMetadata } from '../database/models';
+import { LocalApiEmbeddingClient } from '../embeddings/local-api-client';
 
 // 领域信息接口
 export interface DomainInfo {
@@ -28,11 +29,13 @@ export interface KnowledgeStats {
 export class NewKnowledgeRetriever {
   private vectorClient: QdrantVectorClient;
   private dbModels: DatabaseModels;
-  private readonly VECTOR_DIMENSION = 1024;
+  private localApiClient: LocalApiEmbeddingClient;
+  private readonly VECTOR_DIMENSION = 4096;
 
   constructor() {
     this.vectorClient = new QdrantVectorClient();
     this.dbModels = new DatabaseModels();
+    this.localApiClient = new LocalApiEmbeddingClient();
   }
 
   /**
@@ -177,7 +180,7 @@ export class NewKnowledgeRetriever {
           });
         }
         
-        // Qdrant过滤器必须包装在must数组中
+        // Qdrant过滤器格式修复
         filter = {
           must: conditions
         };
@@ -359,17 +362,24 @@ export class NewKnowledgeRetriever {
   }
 
   /**
-   * 生成向量嵌入 - 简化版本
+   * 生成向量嵌入 - 优化版本
+   * 优先级：1. 本地API (Ollama) 2. DeepSeek API（预留） 3. 本地算法（备用）
    */
   private async generateEmbedding(text: string): Promise<number[]> {
     try {
-      // 方案1: 尝试使用DeepSeek API（预留未来扩展）
+      // 方案1: 尝试使用本地API (Ollama) - 新增优先方案
+      const localApiResult = await this.tryLocalApiEmbedding(text);
+      if (localApiResult) {
+        return localApiResult;
+      }
+
+      // 方案2: 尝试使用DeepSeek API（预留未来扩展）
       const deepSeekResult = await this.tryDeepSeekEmbedding(text);
       if (deepSeekResult) {
         return deepSeekResult;
       }
 
-      // 方案2: 使用改进的本地语义算法
+      // 方案3: 使用改进的本地语义算法（备用方案）
       console.log('使用改进的本地语义算法生成向量');
       return this.generateAdvancedLocalEmbedding(text);
     } catch (error) {
@@ -378,20 +388,73 @@ export class NewKnowledgeRetriever {
     }
   }
 
-     /**
-    * 尝试使用DeepSeek API生成嵌入 (预留接口)
-    */
-    private async tryDeepSeekEmbedding(text: string): Promise<number[] | null> {
-      try {
-        const apiKey = process.env.DEEPSEEK_API_KEY;
-        if (!apiKey) {
-          console.log('DeepSeek API密钥未配置');
-          return null;
-        }
+  /**
+   * 尝试使用本地API (Ollama) 生成嵌入向量
+   */
+  private async tryLocalApiEmbedding(text: string): Promise<number[] | null> {
+    try {
+      console.log('🔄 尝试使用本地API (Ollama) 生成嵌入向量...');
+      
+      // 检查本地API服务状态
+      const isApiAvailable = await this.localApiClient.checkApiStatus();
+      if (!isApiAvailable) {
+        console.log('❌ 本地API服务不可用，跳过');
+        return null;
+      }
 
-        // 注意：DeepSeek目前可能没有专门的embedding API
-        // 这里预留接口，未来如果DeepSeek提供embedding服务可以快速集成
-        // 
+      // 检查模型可用性
+      const isModelAvailable = await this.localApiClient.checkModelAvailability();
+      if (!isModelAvailable) {
+        console.log('❌ 本地API模型不可用，跳过');
+        return null;
+      }
+
+      // 生成嵌入向量
+      const embedding = await this.localApiClient.generateEmbedding(text);
+      
+      // 验证向量维度
+      if (embedding.length !== this.VECTOR_DIMENSION) {
+        console.log(`⚠️  本地API返回向量维度不匹配: ${embedding.length}, 期望: ${this.VECTOR_DIMENSION}`);
+        
+        // 尝试调整向量维度
+        if (embedding.length > this.VECTOR_DIMENSION) {
+          // 截断向量
+          const truncatedEmbedding = embedding.slice(0, this.VECTOR_DIMENSION);
+          console.log(`🔧 向量已截断至 ${this.VECTOR_DIMENSION} 维`);
+          return truncatedEmbedding;
+        } else {
+          // 填充向量
+          const paddedEmbedding = [...embedding];
+          while (paddedEmbedding.length < this.VECTOR_DIMENSION) {
+            paddedEmbedding.push(0.001);
+          }
+          console.log(`🔧 向量已填充至 ${this.VECTOR_DIMENSION} 维`);
+          return paddedEmbedding;
+        }
+      }
+
+      console.log(`✅ 本地API嵌入向量生成成功: ${embedding.length}维`);
+      return embedding;
+    } catch (error) {
+      console.error('本地API嵌入向量生成失败:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 尝试使用DeepSeek API生成嵌入 (预留接口)
+   */
+  private async tryDeepSeekEmbedding(text: string): Promise<number[] | null> {
+    try {
+      const apiKey = process.env.DEEPSEEK_API_KEY;
+      if (!apiKey) {
+        console.log('DeepSeek API密钥未配置');
+        return null;
+      }
+
+      // 注意：DeepSeek目前可能没有专门的embedding API
+      // 这里预留接口，未来如果DeepSeek提供embedding服务可以快速集成
+      // 
                  // 可能的实现方案（当DeepSeek支持时）：
          // const response = await fetch('https://api.deepseek.com/v1/embeddings', {
          //   method: 'POST',
@@ -421,8 +484,6 @@ export class NewKnowledgeRetriever {
       }
     }
 
-  
-
   /**
    * 改进的本地语义向量生成算法
    */
@@ -433,6 +494,12 @@ export class NewKnowledgeRetriever {
     const cleanText = this.preprocessText(text);
     const words = this.segmentWords(cleanText);
     const phrases = this.extractPhrases(cleanText);
+    
+    // 如果文本为空，返回零向量
+    if (words.length === 0 && phrases.length === 0) {
+      console.warn('预留位置: 0字符文本的embedding生成');
+      return new Array(this.VECTOR_DIMENSION).fill(0.001); // 避免完全的零向量
+    }
     
     // 多层次特征提取
     const features = {
@@ -446,34 +513,67 @@ export class NewKnowledgeRetriever {
       domain: this.extractDomainFeatures(words, phrases)
     };
     
-    // 组合特征到向量空间
+    // 验证特征数组
+    Object.entries(features).forEach(([name, featureArray]) => {
+      if (!Array.isArray(featureArray) || featureArray.length === 0) {
+        console.warn(`特征数组 ${name} 为空，使用默认值`);
+        features[name as keyof typeof features] = new Array(64).fill(0.001);
+      }
+      
+      // 检查并修复无效值
+      features[name as keyof typeof features] = featureArray.map(val => {
+        if (val === null || val === undefined || !isFinite(val) || isNaN(val)) {
+          return 0.001; // 替换无效值
+        }
+        return val;
+      });
+    });
+    
+    // 组合特征到向量空间 (4096维 = 16个256维段)
     let offset = 0;
     
-    // 填充词汇特征
-    for (let i = 0; i < 256; i++) {
-      vector[offset + i] = features.lexical[i % features.lexical.length];
+    // 填充词汇特征 (0-1023维，4个段)
+    for (let segment = 0; segment < 4; segment++) {
+      for (let i = 0; i < 256; i++) {
+        vector[offset + i] = features.lexical[i % features.lexical.length];
+      }
+      offset += 256;
     }
-    offset += 256;
     
-    // 填充语义特征
-    for (let i = 0; i < 256; i++) {
-      vector[offset + i] = features.semantic[i % features.semantic.length];
+    // 填充语义特征 (1024-2047维，4个段)
+    for (let segment = 0; segment < 4; segment++) {
+      for (let i = 0; i < 256; i++) {
+        vector[offset + i] = features.semantic[i % features.semantic.length];
+      }
+      offset += 256;
     }
-    offset += 256;
     
-    // 填充句法特征
-    for (let i = 0; i < 256; i++) {
-      vector[offset + i] = features.syntactic[i % features.syntactic.length];
+    // 填充句法特征 (2048-3071维，4个段)
+    for (let segment = 0; segment < 4; segment++) {
+      for (let i = 0; i < 256; i++) {
+        vector[offset + i] = features.syntactic[i % features.syntactic.length];
+      }
+      offset += 256;
     }
-    offset += 256;
     
-    // 填充领域特征
-    for (let i = 0; i < 256; i++) {
-      vector[offset + i] = features.domain[i % features.domain.length];
+    // 填充领域特征 (3072-4095维，4个段)
+    for (let segment = 0; segment < 4; segment++) {
+      for (let i = 0; i < 256; i++) {
+        vector[offset + i] = features.domain[i % features.domain.length];
+      }
+      offset += 256;
     }
+    
+    // 最终安全检查
+    const safeVector = vector.map(val => {
+      if (val === null || val === undefined || !isFinite(val) || isNaN(val)) {
+        return 0.001;
+      }
+      return val;
+    });
     
     // 标准化向量
-    return this.normalizeVector(vector);
+    return this.normalizeVector(safeVector);
   }
 
   /**
@@ -578,24 +678,25 @@ export class NewKnowledgeRetriever {
       legal: ['法律', '法规', '合同', '权利', '义务', '法院', '律师', '条款', '规定', '制度']
     };
     
-         // 计算各主题的匹配度
-     for (const [, keywords] of Object.entries(semanticDict)) {
-       let score = 0;
-       const allText = [...words, ...phrases].join('');
-       
-       keywords.forEach(keyword => {
-         const count = (allText.match(new RegExp(keyword, 'g')) || []).length;
-         score += count;
-       });
-       
-       features.push(score / (words.length + phrases.length));
-     }
+    // 计算各主题的匹配度
+    const totalLength = words.length + phrases.length;
+    for (const [, keywords] of Object.entries(semanticDict)) {
+      let score = 0;
+      const allText = [...words, ...phrases].join('');
+      
+      keywords.forEach(keyword => {
+        const count = (allText.match(new RegExp(keyword, 'g')) || []).length;
+        score += count;
+      });
+      
+      features.push(totalLength > 0 ? score / totalLength : 0);
+    }
     
     // 语义密度特征
     const semanticWords = words.filter(word => 
       Object.values(semanticDict).flat().some(keyword => word.includes(keyword))
     );
-    features.push(semanticWords.length / words.length);
+    features.push(words.length > 0 ? semanticWords.length / words.length : 0);
     
     // 填充到64维
     while (features.length < 64) {
@@ -617,11 +718,11 @@ export class NewKnowledgeRetriever {
     const sentences = text.split(/[。！？]/).filter(s => s.trim().length > 0);
     
     features.push(
-      punctuation.length / text.length,                    // 标点密度
+      text.length > 0 ? punctuation.length / text.length : 0,                    // 标点密度
       sentences.length > 0 ? text.length / sentences.length : 0, // 平均句长
-      (text.match(/[，；：]/g) || []).length / text.length,       // 分隔符密度
-      (text.match(/[？]/g) || []).length / text.length,           // 疑问句比例
-      (text.match(/[！]/g) || []).length / text.length            // 感叹句比例
+      text.length > 0 ? (text.match(/[，；：]/g) || []).length / text.length : 0,       // 分隔符密度
+      text.length > 0 ? (text.match(/[？]/g) || []).length / text.length : 0,           // 疑问句比例
+      text.length > 0 ? (text.match(/[！]/g) || []).length / text.length : 0            // 感叹句比例
     );
     
     // 填充到64维
@@ -651,13 +752,14 @@ export class NewKnowledgeRetriever {
     };
     
     // 计算各领域的匹配度
+    const totalLength = words.length + phrases.length;
     for (const keywords of Object.values(domainKeywords)) {
       let score = 0;
       keywords.forEach(keyword => {
         const count = (allText.match(new RegExp(keyword, 'g')) || []).length;
         score += count;
       });
-      features.push(score / (words.length + phrases.length));
+      features.push(totalLength > 0 ? score / totalLength : 0);
     }
     
     // 填充到64维

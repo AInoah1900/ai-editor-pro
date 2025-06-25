@@ -75,7 +75,7 @@ export default function WorkArea({
   const [isSelectingFile, setIsSelectingFile] = useState(false);
   
   // 文档查看器状态
-  const [documentSource, setDocumentSource] = useState<'personal' | 'shared'>('shared');
+  const [documentSource, setDocumentSource] = useState<'private' | 'shared'>('shared');
   const [currentDocument, setCurrentDocument] = useState<FileMetadata | null>(null);
   
   // Toast通知状态
@@ -130,7 +130,7 @@ export default function WorkArea({
 
   // 当切换到知识库子菜单时自动加载文档
   React.useEffect(() => {
-    if (activeSubMenu === 'personal') {
+    if (activeSubMenu === 'private') {
       loadLibraryFiles('private');
     } else if (activeSubMenu === 'shared') {
       loadLibraryFiles('shared');
@@ -229,21 +229,21 @@ export default function WorkArea({
 
   // 渲染知识库文档列表
   const renderLibraryDocuments = (libraryType: 'private' | 'shared') => {
-    const actualLibraryType = libraryType === 'personal' ? 'private' : 'shared';
-    
-    return (
+    const actualLibraryType = libraryType;
+
+  return (
       <div className="flex flex-col h-full">
         {/* 头部区域 */}
         <div className="bg-white border-b border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                libraryType === 'personal' 
+                libraryType === 'private' 
                   ? 'bg-purple-100 text-purple-600' 
                   : 'bg-green-100 text-green-600'
               }`}>
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {libraryType === 'personal' ? (
+                  {libraryType === 'private' ? (
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   ) : (
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
@@ -252,10 +252,10 @@ export default function WorkArea({
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">
-                  {libraryType === 'personal' ? '专属知识库' : '共享知识库'}
+                  {libraryType === 'private' ? '专属知识库' : '共享知识库'}
                 </h3>
                 <p className="text-sm text-gray-500">
-                  {libraryType === 'personal' 
+                  {libraryType === 'private' 
                     ? '管理您的个人专业文档资料' 
                     : '访问团队共享的知识资源'
                   }
@@ -268,7 +268,7 @@ export default function WorkArea({
               onClick={() => triggerFileUpload(actualLibraryType)}
               disabled={isUploading || isSelectingFile}
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                libraryType === 'personal'
+                libraryType === 'private'
                   ? 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-purple-400'
                   : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-green-400'
               }`}
@@ -302,7 +302,7 @@ export default function WorkArea({
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
                   className={`h-2 rounded-full transition-all duration-300 ${
-                    libraryType === 'personal' ? 'bg-purple-600' : 'bg-green-600'
+                    libraryType === 'private' ? 'bg-purple-600' : 'bg-green-600'
                   }`}
                   style={{ width: `${uploadProgress}%` }}
                 ></div>
@@ -334,7 +334,7 @@ export default function WorkArea({
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
                 <div className={`w-8 h-8 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4 ${
-                  libraryType === 'personal' ? 'border-purple-600' : 'border-green-600'
+                  libraryType === 'private' ? 'border-purple-600' : 'border-green-600'
                 }`}></div>
                 <p className="text-gray-500">正在加载文档...</p>
               </div>
@@ -351,7 +351,7 @@ export default function WorkArea({
               <button
                 onClick={() => loadLibraryFiles(actualLibraryType)}
                 className={`px-4 py-2 text-white rounded-lg transition-colors ${
-                  libraryType === 'personal' 
+                  libraryType === 'private' 
                     ? 'bg-purple-600 hover:bg-purple-700' 
                     : 'bg-green-600 hover:bg-green-700'
                 }`}
@@ -362,17 +362,17 @@ export default function WorkArea({
           ) : libraryFiles.length === 0 ? (
             <div className="text-center py-12">
               <div className={`mb-4 ${
-                libraryType === 'personal' ? 'text-purple-400' : 'text-green-400'
+                libraryType === 'private' ? 'text-purple-400' : 'text-green-400'
               }`}>
                 <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
               <h4 className="text-lg font-medium text-gray-900 mb-2">
-                {libraryType === 'personal' ? '专属知识库为空' : '共享知识库为空'}
+                {libraryType === 'private' ? '专属知识库为空' : '共享知识库为空'}
               </h4>
               <p className="text-gray-500 mb-6">
-                {libraryType === 'personal' 
+                {libraryType === 'private' 
                   ? '您还没有上传任何个人文档，点击上方"新增知识库"按钮开始添加' 
                   : '团队还没有共享任何文档，点击上方"新增知识库"按钮开始添加'
                 }
@@ -381,14 +381,14 @@ export default function WorkArea({
                 onClick={() => triggerFileUpload(actualLibraryType)}
                 disabled={isUploading || isSelectingFile}
                 className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                  libraryType === 'personal'
+                  libraryType === 'private'
                     ? 'bg-purple-600 hover:bg-purple-700 text-white disabled:bg-purple-400'
                     : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-green-400'
                 }`}
               >
                 {isUploading ? '上传中...' : 
                  isSelectingFile ? '选择文件...' : 
-                 (libraryType === 'personal' ? '上传个人文档' : '添加共享文档')}
+                 (libraryType === 'private' ? '上传个人文档' : '添加共享文档')}
               </button>
             </div>
           ) : (
@@ -449,10 +449,10 @@ export default function WorkArea({
                   </div>
                   
                   <div className="flex items-center space-x-2">
-                    <button
+        <button
                       onClick={() => handleOpenDocument(doc, 'view')}
                       className={`flex-1 px-3 py-2 text-sm text-white rounded-lg transition-colors ${
-                        libraryType === 'personal' 
+                        libraryType === 'private' 
                           ? 'bg-purple-600 hover:bg-purple-700' 
                           : 'bg-green-600 hover:bg-green-700'
                       }`}
@@ -566,7 +566,7 @@ export default function WorkArea({
         setCurrentDocument(document); // 保存当前文档信息
         
         // 记录文档来源，用于返回时跳转到正确的列表
-        setDocumentSource(document.ownership_type === 'private' ? 'personal' : 'shared');
+        setDocumentSource(document.ownership_type === 'private' ? 'private' : 'shared');
         
         // 显示成功提示
         showToast('success', `文档 "${document.filename}" 打开成功`);
@@ -1153,7 +1153,7 @@ export default function WorkArea({
                                   className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                                 >
                                   下载
-                                </button>
+        </button>
                               </div>
                             </div>
                           ))}
@@ -1187,7 +1187,7 @@ export default function WorkArea({
           </div>
         );
       
-      case 'personal':
+      case 'private':
       case 'shared':
         return renderLibraryDocuments(activeSubMenu);
       
@@ -1253,9 +1253,9 @@ export default function WorkArea({
             <div className="text-center">
               <div className="text-gray-400 mb-4">
                 <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">个人设置</h3>
               <p className="text-gray-500 mb-6">配置您的账户和偏好设置</p>
@@ -1337,4 +1337,4 @@ export default function WorkArea({
       )}
     </div>
   );
-}
+} 

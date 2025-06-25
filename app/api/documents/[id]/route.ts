@@ -80,7 +80,7 @@ export async function GET(
             // DOCX文件使用mammoth提取文本
             try {
               const buffer = fs.readFileSync(filePath);
-              const result = await mammoth.extractRawText({ buffer });
+              const result = await mammoth.extractRawText({ buffer: buffer });
               textContent = result.value;
               
               if (result.messages.length > 0) {

@@ -9,13 +9,13 @@ async function testFixedVector() {
     // 1. 创建测试集合
     console.log('1. 创建测试集合...');
     await client.createCollection('test-fixed', {
-      vectors: { size: 1024, distance: 'Cosine' }
+      vectors: { size: 4096, distance: 'Cosine' }
     });
     console.log('✅ 集合创建成功');
     
     // 2. 测试添加向量点
     console.log('\n2. 测试添加向量点...');
-    const testVector = new Array(1024).fill(0).map(() => Math.random());
+    const testVector = new Array(4096).fill(0).map(() => Math.random());
     
     await client.upsert('test-fixed', {
       points: [{
@@ -53,7 +53,7 @@ async function testFixedVector() {
     
     // 4. 测试复杂 payload
     console.log('\n4. 测试复杂 payload...');
-    const complexVector = new Array(1024).fill(0.5);
+    const complexVector = new Array(4096).fill(0.5);
     await client.upsert('test-fixed', {
       points: [{
         id: 2,

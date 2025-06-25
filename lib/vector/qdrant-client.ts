@@ -1,5 +1,15 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
-import { v4 as uuidv4 } from 'uuid';
+
+// 从环境变量读取Qdrant配置
+const getQdrantConfig = () => {
+  return {
+    url: process.env.QDRANT_URL || 'http://localhost:6333',
+    timeout: parseInt(process.env.QDRANT_TIMEOUT || '600000'), // 10分钟超时
+  };
+};
+
+const VECTOR_SIZE = parseInt(process.env.QDRANT_VECTOR_SIZE || '4096');
+const COLLECTION_NAME = process.env.QDRANT_COLLECTION_NAME || 'knowledge_vectors';
 
 /**
  * Qdrant 向量数据库客户端
@@ -7,14 +17,11 @@ import { v4 as uuidv4 } from 'uuid';
  */
 export class QdrantVectorClient {
   private client: QdrantClient;
-  private readonly COLLECTION_NAME = 'knowledge-base';
-  private readonly VECTOR_SIZE = 1024;
   private pointIdCounter = 1;
 
   constructor() {
-    this.client = new QdrantClient({
-      url: 'http://localhost:6333',
-    });
+    // 使用环境变量配置Qdrant连接
+    this.client = new QdrantClient(getQdrantConfig());
   }
 
   /**
@@ -69,14 +76,14 @@ export class QdrantVectorClient {
       // 检查集合是否存在
       const collections = await this.client.getCollections();
       const collectionExists = collections.collections.some(
-        (collection) => collection.name === this.COLLECTION_NAME
+        (collection) => collection.name === COLLECTION_NAME
       );
 
       if (!collectionExists) {
         // 创建新集合
-        await this.client.createCollection(this.COLLECTION_NAME, {
+        await this.client.createCollection(COLLECTION_NAME, {
           vectors: {
-            size: this.VECTOR_SIZE,
+            size: VECTOR_SIZE,
             distance: 'Cosine',
           },
         });
@@ -108,7 +115,7 @@ export class QdrantVectorClient {
       // 使用数字 ID 而不是字符串 ID
       const pointId = this.generatePointId();
       
-      await this.client.upsert(this.COLLECTION_NAME, {
+      await this.client.upsert(COLLECTION_NAME, {
         points: [
           {
             id: pointId,
@@ -144,8 +151,8 @@ export class QdrantVectorClient {
       await this.initializeCollection();
       
       // 验证向量维度
-      if (queryVector.length !== this.VECTOR_SIZE) {
-        console.error(`向量维度不匹配: 期望${this.VECTOR_SIZE}，实际${queryVector.length}`);
+      if (queryVector.length !== VECTOR_SIZE) {
+        console.error(`向量维度不匹配: 期望${VECTOR_SIZE}，实际${queryVector.length}`);
         return [];
       }
       
@@ -180,9 +187,10 @@ export class QdrantVectorClient {
         }
       }
       
-      console.log('搜索参数:', JSON.stringify(searchParams, null, 2));
+      // todo：暂时注释搜索参数，避免搜索参数过长导致无法全部展示终端信息
+      // console.log('搜索参数:', JSON.stringify(searchParams, null, 2));
       
-      const searchResponse = await this.client.search(this.COLLECTION_NAME, searchParams);
+      const searchResponse = await this.client.search(COLLECTION_NAME, searchParams);
 
       console.log(`搜索完成，找到 ${searchResponse.length} 个结果`);
 
@@ -208,27 +216,30 @@ export class QdrantVectorClient {
       }
       
       // 如果是Bad Request错误，尝试不使用过滤器重新搜索
-      if (error && typeof error === 'object' && 
-          ((error as any).status === 400 || (error as any).response?.status === 400)) {
-        console.log('尝试不使用过滤器重新搜索...');
-        
-        try {
-          const fallbackParams = {
-            vector: queryVector,
-            limit: limit,
-            with_payload: true,
-          };
+      if (error && typeof error === 'object') {
+        const httpError = error as any;
+        const status = httpError.status || httpError.response?.status;
+        if (status === 400) {
+          console.log('尝试不使用过滤器重新搜索...');
           
-          const fallbackResponse = await this.client.search(this.COLLECTION_NAME, fallbackParams);
-          console.log(`备用搜索完成，找到 ${fallbackResponse.length} 个结果`);
-          
-          return fallbackResponse.map((result) => ({
-            id: (result.payload?.original_id as string) || String(result.id),
-            score: result.score,
-            payload: result.payload || {},
-          }));
-        } catch (fallbackError) {
-          console.error('备用搜索也失败:', fallbackError);
+          try {
+            const fallbackParams = {
+              vector: queryVector,
+              limit: limit,
+              with_payload: true,
+            };
+            
+            const fallbackResponse = await this.client.search(COLLECTION_NAME, fallbackParams);
+            console.log(`备用搜索完成，找到 ${fallbackResponse.length} 个结果`);
+            
+            return fallbackResponse.map((result) => ({
+              id: (result.payload?.original_id as string) || String(result.id),
+              score: result.score,
+              payload: result.payload || {},
+            }));
+          } catch (fallbackError) {
+            console.error('备用搜索也失败:', fallbackError);
+          }
         }
       }
       
@@ -243,7 +254,7 @@ export class QdrantVectorClient {
     try {
       // 注意：这里需要根据原始 ID 查找对应的数字 ID
       // 简化实现：直接使用字符串 ID（如果 Qdrant 支持）
-      await this.client.delete(this.COLLECTION_NAME, {
+      await this.client.delete(COLLECTION_NAME, {
         points: [id],
       });
       console.log(`向量点 ${id} 删除成功`);
@@ -264,7 +275,7 @@ export class QdrantVectorClient {
       // 首先确保集合存在
       await this.initializeCollection();
       
-      const info = await this.client.getCollection(this.COLLECTION_NAME);
+      const info = await this.client.getCollection(COLLECTION_NAME);
       return {
         vectors_count: info.vectors_count || 0,
         points_count: info.points_count || 0,

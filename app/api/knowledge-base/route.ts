@@ -302,12 +302,12 @@ async function handleFileUpload(request: NextRequest): Promise<NextResponse> {
     fs.writeFileSync(filePath, buffer);
     
     // 生成文件内容摘要（用于向量化）
-    // let content = '';
-    // if (fileExtension === 'txt' || fileExtension === 'md') {
-    //   content = buffer.toString('utf-8').substring(0, 1000); // 取前1000字符作为摘要
-    // } else {
-    //   content = `${file.name} - ${fileExtension.toUpperCase()}文档`;
-    // }
+    let content = '';
+    if (fileExtension === 'txt' || fileExtension === 'md') {
+      content = buffer.toString('utf-8').substring(0, 1000); // 取前1000字符作为摘要
+    } else {
+      content = `${file.name} - ${fileExtension.toUpperCase()}文档`;
+    }
     
     // 创建文件元数据
     const vectorId = `vector_${libraryType}_${fileId}`;
@@ -332,9 +332,35 @@ async function handleFileUpload(request: NextRequest): Promise<NextResponse> {
     const dbModels = new DatabaseModels();
     await dbModels.addFileMetadata(fileMetadata);
     
-    // 生成向量并存储到Qdrant (暂时跳过向量化，后续可以添加)
-    // const retriever = new NewKnowledgeRetriever();
-    // TODO: 实现文档向量化功能
+    // 生成向量并存储到Qdrant
+    try {
+      const retriever = new NewKnowledgeRetriever();
+      
+      // 创建知识项用于向量化
+      const knowledgeItem = {
+        id: `file_${fileId}`,
+        type: 'case' as const, // 使用case类型来表示文档案例
+        domain: 'general',
+        content: content,
+        context: `文档: ${file.name}`,
+        source: file.name,
+        confidence: 0.9,
+        tags: [fileExtension, libraryType],
+        vector_id: vectorId,
+        ownership_type: libraryType as 'private' | 'shared',
+        owner_id: libraryType === 'private' ? ownerId : undefined,
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+      
+      // 添加到知识库（会自动生成向量）
+      await retriever.addKnowledgeItem(knowledgeItem);
+      
+      console.log(`文档向量化完成: ${file.name} -> ${vectorId}`);
+    } catch (vectorError) {
+      console.error('文档向量化失败:', vectorError);
+      // 不影响文件上传成功，只是没有向量化
+    }
     
     return NextResponse.json({
       success: true,

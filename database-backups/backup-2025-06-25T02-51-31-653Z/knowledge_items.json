@@ -1,0 +1,92 @@
+[
+  {
+    "id": "academic_writing_1",
+    "type": "rule",
+    "domain": "academic",
+    "content": "学术论文应当使用客观、严谨的语言，避免主观色彩过强的表达。",
+    "context": "学术写作规范",
+    "source": "学术写作指南",
+    "confidence": "0.95",
+    "tags": [
+      "学术写作",
+      "语言规范"
+    ],
+    "vector_id": "vector_academic_writing_1_1750488929546",
+    "created_at": "2025-06-21T06:55:29.561Z",
+    "updated_at": "2025-06-20T22:59:30.308Z",
+    "ownership_type": "shared",
+    "owner_id": "default_user"
+  },
+  {
+    "id": "technical_doc_1",
+    "type": "rule",
+    "domain": "technical",
+    "content": "技术文档应当包含清晰的步骤说明，每个步骤都应该可以独立验证。",
+    "context": "技术文档编写",
+    "source": "技术写作最佳实践",
+    "confidence": "0.90",
+    "tags": [
+      "技术文档",
+      "步骤说明"
+    ],
+    "vector_id": "vector_technical_doc_1_1750488929568",
+    "created_at": "2025-06-21T06:55:29.573Z",
+    "updated_at": "2025-06-20T22:59:31.548Z",
+    "ownership_type": "shared",
+    "owner_id": "default_user"
+  },
+  {
+    "id": "medical_term_1",
+    "type": "terminology",
+    "domain": "medical",
+    "content": "诊断是指通过病史采集、体格检查和辅助检查确定疾病性质的过程。",
+    "context": "医学术语",
+    "source": "医学教材",
+    "confidence": "0.98",
+    "tags": [
+      "医学",
+      "诊断"
+    ],
+    "vector_id": "vector_medical_term_1_1750488929574",
+    "created_at": "2025-06-21T06:55:29.580Z",
+    "updated_at": "2025-06-20T22:59:32.809Z",
+    "ownership_type": "shared",
+    "owner_id": "default_user"
+  },
+  {
+    "id": "research_method_1",
+    "type": "case",
+    "domain": "academic",
+    "content": "定量研究方法适用于需要数据统计分析的研究问题，强调客观性和可重复性。",
+    "context": "研究方法论",
+    "source": "研究方法指南",
+    "confidence": "0.92",
+    "tags": [
+      "研究方法",
+      "定量研究"
+    ],
+    "vector_id": "vector_research_method_1_1750488929581",
+    "created_at": "2025-06-21T06:55:29.586Z",
+    "updated_at": "2025-06-20T22:59:33.829Z",
+    "ownership_type": "shared",
+    "owner_id": "default_user"
+  },
+  {
+    "id": "business_analysis_1",
+    "type": "case",
+    "domain": "business",
+    "content": "市场分析应当包括目标市场规模、竞争对手分析和市场趋势预测三个核心要素。",
+    "context": "商业分析",
+    "source": "商业分析手册",
+    "confidence": "0.88",
+    "tags": [
+      "市场分析",
+      "商业"
+    ],
+    "vector_id": "vector_business_analysis_1_1750488929587",
+    "created_at": "2025-06-21T06:55:29.592Z",
+    "updated_at": "2025-06-20T22:59:34.671Z",
+    "ownership_type": "shared",
+    "owner_id": "default_user"
+  }
+]

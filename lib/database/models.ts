@@ -1,4 +1,19 @@
 import { Pool, PoolClient } from 'pg';
+import { QdrantClient } from '@qdrant/js-client-rest';
+
+// 从环境变量读取PostgreSQL配置
+const getPostgreSQLConfig = () => {
+  return {
+    host: process.env.POSTGRES_HOST || 'localhost',
+    port: parseInt(process.env.POSTGRES_PORT || '5432'),
+    database: process.env.POSTGRES_DB || 'postgres',
+    user: process.env.POSTGRES_USER || 'myuser',
+    password: process.env.POSTGRES_PASSWORD || '12345678',
+    max: parseInt(process.env.POSTGRES_MAX_CONNECTIONS || '20'),
+    idleTimeoutMillis: parseInt(process.env.POSTGRES_IDLE_TIMEOUT || '30000'),
+    connectionTimeoutMillis: parseInt(process.env.POSTGRES_CONNECTION_TIMEOUT || '2000'),
+  };
+};
 
 /**
  * PostgreSQL 数据库连接池
@@ -7,15 +22,12 @@ class DatabasePool {
   private pool: Pool;
 
   constructor() {
-    this.pool = new Pool({
-      host: 'localhost',
-      port: 5432,
-      database: 'postgres',
-      user: 'myuser',
-      password: '12345678',
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+    this.pool = new Pool(getPostgreSQLConfig());
+    
+    // 错误处理
+    this.pool.on('error', (err) => {
+      console.error('Unexpected error on idle client', err);
+      process.exit(-1);
     });
   }
 

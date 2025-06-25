@@ -1,0 +1,16 @@
+{
+  "timestamp": "2025-06-24T08:35:38.235Z",
+  "testName": "DeepSeek-R1 API详细测试",
+  "results": [
+    {
+      "test": "single_api_call",
+      "success": false,
+      "timestamp": "2025-06-24T08:35:38.234Z"
+    }
+  ],
+  "summary": {
+    "totalTests": 1,
+    "passedTests": 0,
+    "optimizationStatus": "需要优化"
+  }
+}

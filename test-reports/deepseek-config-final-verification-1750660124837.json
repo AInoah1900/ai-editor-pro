@@ -1,0 +1,66 @@
+{
+  "timestamp": "2025-06-23T06:28:41.404Z",
+  "tests": [
+    {
+      "name": "构建文件存在性检查",
+      "status": "PASSED",
+      "details": "页面构建文件已正确生成",
+      "error": null,
+      "timestamp": "2025-06-23T06:28:41.412Z"
+    },
+    {
+      "name": "页面源文件检查",
+      "status": "PASSED",
+      "details": "页面组件和内容正确",
+      "error": null,
+      "timestamp": "2025-06-23T06:28:41.412Z"
+    },
+    {
+      "name": "配置组件文件检查",
+      "status": "PASSED",
+      "details": "配置组件功能完整",
+      "error": null,
+      "timestamp": "2025-06-23T06:28:41.413Z"
+    },
+    {
+      "name": "页面HTTP访问测试",
+      "status": "PASSED",
+      "details": "HTTP 200: 页面内容正确",
+      "error": null,
+      "timestamp": "2025-06-23T06:28:41.656Z"
+    },
+    {
+      "name": "API状态端点测试",
+      "status": "PASSED",
+      "details": "当前提供商: local",
+      "error": null,
+      "timestamp": "2025-06-23T06:28:41.702Z"
+    },
+    {
+      "name": "API模型端点测试",
+      "status": "PASSED",
+      "details": "可用模型: deepseek-r1:8b",
+      "error": null,
+      "timestamp": "2025-06-23T06:28:41.737Z"
+    },
+    {
+      "name": "本地API连接测试",
+      "status": "PASSED",
+      "details": "本地API连接测试成功",
+      "error": null,
+      "timestamp": "2025-06-23T06:28:44.836Z"
+    },
+    {
+      "name": "环境配置检查",
+      "status": "PASSED",
+      "details": "所有必需的环境变量都正确配置",
+      "error": null,
+      "timestamp": "2025-06-23T06:28:44.837Z"
+    }
+  ],
+  "summary": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0
+  }
+}

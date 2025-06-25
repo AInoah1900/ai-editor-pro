@@ -1,0 +1,38 @@
+{
+  "timestamp": "2025-06-23T16:18:22.309Z",
+  "testType": "Chat API Integration Test",
+  "configuration": {
+    "apiBaseURL": "http://localhost:3002",
+    "ollamaBaseURL": "http://localhost:11434",
+    "testTimeout": 60000
+  },
+  "results": {
+    "deepseekConfig": {
+      "success": false,
+      "error": "Unexpected token '<', \"<!DOCTYPE \"... is not valid JSON"
+    },
+    "documentAnalysis": {
+      "success": true,
+      "duration": 36787,
+      "errorsFound": 1,
+      "hasProvider": false
+    },
+    "ragAnalysis": {
+      "success": true,
+      "duration": 105999,
+      "domain": "technical",
+      "knowledgeUsed": 1,
+      "errorsFound": 1
+    },
+    "directOllama": {
+      "success": true,
+      "model": "deepseek-r1:8b",
+      "contentLength": 359
+    }
+  },
+  "summary": {
+    "totalTests": 4,
+    "passedTests": 3,
+    "failedTests": 1
+  }
+}

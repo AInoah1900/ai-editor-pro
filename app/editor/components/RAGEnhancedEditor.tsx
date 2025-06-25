@@ -49,6 +49,22 @@ interface EditingState {
   content: string;
 }
 
+// 新增：替换后内容的状态接口
+interface ReplacedContent {
+  id: string;
+  position: { start: number; end: number };
+  original: string;
+  replaced: string;
+  timestamp: Date;
+}
+
+// 新增：浮动菜单状态接口
+interface FloatingMenuState {
+  errorId: string | null;
+  position: { x: number; y: number };
+  isVisible: boolean;
+}
+
 export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
   const [documentContent, setDocumentContent] = useState(content);
   const [errors, setErrors] = useState<ErrorItem[]>([]);
@@ -63,6 +79,23 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
   });
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isUsingRAG, setIsUsingRAG] = useState(true);
+
+  // 新增状态：替换后内容记录
+  const [replacedContents, setReplacedContents] = useState<ReplacedContent[]>([]);
+  
+  // 新增状态：浮动菜单
+  const [floatingMenu, setFloatingMenu] = useState<FloatingMenuState>({
+    errorId: null,
+    position: { x: 0, y: 0 },
+    isVisible: false
+  });
+
+  // 新增状态：文档统计信息
+  const [documentStats, setDocumentStats] = useState({
+    originalLength: 0,
+    currentLength: 0,
+    charactersProcessed: 0
+  });
 
   const editorRef = useRef<HTMLDivElement>(null);
 
@@ -112,11 +145,19 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
           
           // 显示多知识库使用情况
           if (result.knowledge_sources) {
-            console.log('知识库使用统计:', {
+            console.log('🔍 知识库使用统计:', {
               专属知识库: result.knowledge_sources.private_count,
               共享知识库: result.knowledge_sources.shared_count,
               总计: result.knowledge_sources.total_count
             });
+            
+            // 详细调试信息
+            console.log('📊 详细knowledge_sources数据:', result.knowledge_sources);
+            console.log('🎯 private_count值:', result.knowledge_sources.private_count, typeof result.knowledge_sources.private_count);
+            console.log('🎯 shared_count值:', result.knowledge_sources.shared_count, typeof result.knowledge_sources.shared_count);
+            console.log('🎯 total_count值:', result.knowledge_sources.total_count, typeof result.knowledge_sources.total_count);
+          } else {
+            console.warn('⚠️ knowledge_sources数据缺失!');
           }
           
           if (result.document_sources) {
@@ -343,6 +384,119 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
     setEditingState(null);
   };
 
+  // 新增：显示浮动菜单
+  const showFloatingMenu = (errorId: string, event: React.MouseEvent) => {
+    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    setFloatingMenu({
+      errorId,
+      position: {
+        x: rect.left + rect.width / 2,
+        y: rect.top - 10 // 菜单显示在标注上方
+      },
+      isVisible: true
+    });
+  };
+
+  // 新增：隐藏浮动菜单
+  const hideFloatingMenu = () => {
+    setFloatingMenu(prev => ({
+      ...prev,
+      isVisible: false
+    }));
+    // 延迟清除，允许点击菜单项
+    setTimeout(() => {
+      setFloatingMenu(prev => ({
+        ...prev,
+        errorId: null
+      }));
+    }, 300);
+  };
+
+  // 新增：替换错误内容（带蓝色标注）
+  const replaceWithSuggestion = async (errorId: string, customSuggestion?: string) => {
+    const error = errors.find(e => e.id === errorId);
+    if (!error) return;
+
+    const suggestion = customSuggestion || error.suggestion;
+    
+    // 记录替换操作
+    const replacedContent: ReplacedContent = {
+      id: `replaced_${Date.now()}`,
+      position: error.position,
+      original: error.original,
+      replaced: suggestion,
+      timestamp: new Date()
+    };
+    
+    setReplacedContents(prev => [...prev, replacedContent]);
+
+    // 更新文档内容
+    const newContent = 
+      documentContent.slice(0, error.position.start) + 
+      suggestion + 
+      documentContent.slice(error.position.end);
+    
+    setDocumentContent(newContent);
+
+    // 记录纠错历史
+    const record: CorrectionRecord = {
+      id: errorId,
+      original: error.original,
+      corrected: suggestion,
+      timestamp: new Date()
+    };
+    setCorrectionRecords(prev => [...prev, record]);
+
+    // 移除该错误
+    setErrors(prev => prev.filter(e => e.id !== errorId));
+    
+    // 隐藏浮动菜单
+    hideFloatingMenu();
+
+    console.log(`✅ 替换完成: "${error.original}" -> "${suggestion}"`);
+  };
+
+  // 新增：验证文档完整性
+  const validateDocumentIntegrity = () => {
+    const stats = {
+      originalLength: content.length,
+      currentLength: documentContent.length,
+      hasAllContent: documentContent.includes(content.substring(0, Math.min(100, content.length))),
+      charactersLost: Math.max(0, content.length - documentContent.length),
+      charactersAdded: Math.max(0, documentContent.length - content.length)
+    };
+    
+    console.log('📊 文档完整性检查:', stats);
+    return stats;
+  };
+
+  // 新增：编辑建议内容
+  const editSuggestion = (errorId: string) => {
+    const error = errors.find(e => e.id === errorId);
+    if (!error) return;
+    
+    const newSuggestion = prompt('请编辑正确提示内容:', error.suggestion);
+    if (newSuggestion && newSuggestion !== error.suggestion) {
+      // 更新错误的建议内容
+      setErrors(prev => prev.map(e => 
+        e.id === errorId 
+          ? { ...e, suggestion: newSuggestion }
+          : e
+      ));
+      console.log(`✏️ 编辑建议: "${error.suggestion}" -> "${newSuggestion}"`);
+    }
+    hideFloatingMenu();
+  };
+
+  // 新增：显示错误详细原因
+  const showErrorDetails = (errorId: string) => {
+    const error = errors.find(e => e.id === errorId);
+    if (!error) return;
+    
+    alert(`错误详情：\n\n类型：${error.type === 'error' ? '确定错误' : error.type === 'warning' ? '疑似错误' : '优化建议'}\n分类：${error.category}\n原因：${error.reason}\n建议：${error.suggestion}`);
+    hideFloatingMenu();
+  };
+
   // 一键纠错
   const handleBatchCorrection = () => {
     const filteredErrors = errors.filter(error => selectedErrorTypes[error.type]);
@@ -364,185 +518,496 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
 
   // 渲染带有内联纠错的文档内容
   const renderDocumentWithInlineCorrections = () => {
-    // 添加调试信息
-    console.log('渲染文档内容:', { 
-      documentContentLength: documentContent?.length || 0, 
+    console.log('🎯 开始渲染文档，分析状态:', { 
+      isAnalyzing, 
+      documentLength: documentContent.length, 
       errorsCount: errors.length,
-      hasContent: !!documentContent 
+      hasContent: !!documentContent
     });
 
-    // 如果没有文档内容，显示提示
-    if (!documentContent || documentContent.trim().length === 0) {
+    // 分析中状态
+    if (isAnalyzing) {
+      console.log('⏳ 显示分析中状态');
       return (
-        <div className="flex items-center justify-center h-full text-gray-500">
-          <div className="text-center">
-            <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <p className="text-lg font-medium mb-2">文档内容为空</p>
-            <p className="text-sm">请上传文档或检查文档是否正确加载</p>
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6 shadow-sm">
+            <div className="flex items-center space-x-3">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <div>
+                <h3 className="text-blue-800 font-semibold text-lg">🔍 AI正在分析文档...</h3>
+                <p className="text-blue-700 text-sm mt-1">
+                  {isUsingRAG ? '✨ 使用RAG知识库进行深度分析' : '🎯 执行基础AI分析'}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {/* 显示原始文档内容 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <h4 className="text-gray-700 font-medium mb-4">📄 文档内容预览</h4>
+            <div className="prose max-w-none">
+              <div className="whitespace-pre-wrap text-gray-900 leading-relaxed">
+                {documentContent}
+              </div>
+            </div>
           </div>
         </div>
       );
     }
 
-    if (errors.length === 0) {
-      return <div className="whitespace-pre-wrap leading-relaxed">{documentContent}</div>;
+    // 检查文档内容
+    if (!documentContent || documentContent.trim().length === 0) {
+      console.log('❌ 文档内容为空');
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p className="text-lg font-medium">暂无文档内容</p>
+          <p className="text-sm mt-2">请上传文档或输入文本进行分析</p>
+        </div>
+      );
     }
 
-    const sortedErrors = [...errors].sort((a, b) => a.position.start - b.position.start);
+    // 无错误的情况
+    if (!errors || errors.length === 0) {
+      console.log('✅ 无错误，显示完整文档');
+      
+      return (
+        <div className="space-y-6">
+          {/* 无错误状态概览 */}
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5 mb-6 shadow-sm">
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-green-800 font-semibold text-lg">✨ 文档质量优秀</h3>
+                <p className="text-green-700 text-sm mt-1">
+                  {isUsingRAG ? '✨ RAG知识库深度分析未发现问题' : '🎯 AI分析未发现问题'}
+                </p>
+              </div>
+            </div>
+            
+            {/* RAG信息显示 */}
+            {isUsingRAG && ragResults && (
+              <div className="mt-3 pt-3 border-t border-green-200">
+                <div className="flex items-center space-x-6 text-sm">
+                  {(() => {
+                    // 直接计算错误统计，避免函数调用可能的循环依赖
+                    const errorCount = errors.filter(e => e.type === 'error').length;
+                    const warningCount = errors.filter(e => e.type === 'warning').length;
+                    const suggestionCount = errors.filter(e => e.type === 'suggestion').length;
+                    
+                    return (
+                      <>
+                        {errorCount > 0 && <span className="text-red-600">❌ 错误: <strong>{errorCount}</strong></span>}
+                        {warningCount > 0 && <span className="text-yellow-600">⚠️ 警告: <strong>{warningCount}</strong></span>}
+                        {suggestionCount > 0 && <span className="text-green-600">💡 建议: <strong>{suggestionCount}</strong></span>}
+                        
+                        {/* RAG信息 */}
+                        {isUsingRAG && ragResults && (
+                          <>
+                            <span className="text-blue-600">🎯 领域: <strong>{ragResults.domain_info?.domain || '通用'}</strong></span>
+                            <span className="text-blue-700">RAG置信度: </span>
+                            <span className="font-medium text-blue-900">{Math.round((ragResults.domain_info.confidence || 0) * 100)}%</span>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* 文档内容 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <div className="prose max-w-none">
+              <div className="whitespace-pre-wrap text-gray-900 leading-relaxed text-base" style={{ lineHeight: '1.8' }}>
+                {documentContent}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 有错误的情况：重新构建带错误标注的文档内容
+    console.log('🔍 有错误，构建带标注的文档内容，错误数量:', errors.length);
+    console.log('📄 文档内容长度:', documentContent.length);
+    console.log('📄 文档内容:', documentContent);
+    
+    // 验证文档完整性
+    const integrityStats = validateDocumentIntegrity();
+    
+    // 修复错误位置验证逻辑 - 更宽松的验证
+    const validErrors = errors.filter(error => {
+      const isValid = error.position && 
+                     typeof error.position.start === 'number' && 
+                     typeof error.position.end === 'number' &&
+                     error.position.start >= 0 && 
+                     error.position.start < error.position.end;
+      
+      // 修复超出文档长度的错误
+      if (isValid && error.position.end > documentContent.length) {
+        console.warn(`⚠️ 修复错误位置: [${error.position.start}-${error.position.end}] -> [${error.position.start}-${documentContent.length}]`);
+        error.position.end = documentContent.length;
+        // 同时修复错误的original内容
+        error.original = documentContent.slice(error.position.start, error.position.end);
+      }
+      
+      if (!isValid) {
+        console.warn('⚠️ 跳过无效错误:', error);
+      }
+      return isValid;
+    });
+
+    console.log(`✅ 有效错误数量: ${validErrors.length}/${errors.length}`);
+    
+    // 如果没有有效错误，直接显示完整文档
+    if (validErrors.length === 0) {
+      console.log('⚠️ 没有有效错误，显示完整文档内容');
+      return (
+        <div className="space-y-6 relative">
+          {/* 错误位置异常提示 */}
+          <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-orange-800 font-semibold">⚠️ 错误位置异常</h3>
+                <p className="text-orange-700 text-sm">检测到错误但位置信息异常，显示原文内容</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 文档内容 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <div className="prose max-w-none">
+              <div className="whitespace-pre-wrap text-gray-900 leading-relaxed text-base" style={{ lineHeight: '1.8' }}>
+                {documentContent}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // 按位置排序并处理重叠错误 - 改进的重叠处理
+    const sortedErrors = validErrors
+      .sort((a, b) => a.position.start - b.position.start)
+      .filter((error, index, arr) => {
+        if (index === 0) return true;
+        const prevError = arr[index - 1];
+        const isOverlapping = error.position.start < prevError.position.end;
+        if (isOverlapping) {
+          console.warn('⚠️ 跳过重叠错误:', error);
+        }
+        return !isOverlapping;
+      });
+
+    console.log(`🔧 去重后错误数量: ${sortedErrors.length}`);
+    
+    // 改进的parts数组构建逻辑
     const parts = [];
     let lastIndex = 0;
 
+    console.log(`📍 开始构建parts，文档长度: ${documentContent.length}`);
+
+    // 如果第一个错误不是从0开始，先添加开头的正常文本
+    if (sortedErrors.length > 0 && sortedErrors[0].position.start > 0) {
+      const initialText = documentContent.slice(0, sortedErrors[0].position.start);
+      console.log(`📝 添加开头正常文本 [0-${sortedErrors[0].position.start}]: "${initialText}"`);
+      parts.push(
+        <span key="text_initial" className="text-gray-900">
+          {initialText}
+        </span>
+      );
+      lastIndex = sortedErrors[0].position.start;
+    }
+
     sortedErrors.forEach((error, index) => {
-      // 添加错误前的正常文本
+      console.log(`\n处理错误 ${index + 1}/${sortedErrors.length}:`);
+      console.log(`  位置: [${error.position.start}-${error.position.end}]`);
+      console.log(`  内容: "${error.original}"`);
+      console.log(`  当前lastIndex: ${lastIndex}`);
+
+      // 添加错误前的正常文本（如果有间隙）
       if (error.position.start > lastIndex) {
-        parts.push(
-          <span key={`text_${index}`}>
-            {documentContent.slice(lastIndex, error.position.start)}
-          </span>
-        );
+        const normalText = documentContent.slice(lastIndex, error.position.start);
+        console.log(`  正常文本 [${lastIndex}-${error.position.start}]: "${normalText}"`);
+        
+        if (normalText) {
+          parts.push(
+            <span key={`text_${index}_${lastIndex}`} className="text-gray-900">
+              {normalText}
+            </span>
+          );
+          console.log(`  ✅ 添加正常文本到parts`);
+        }
       }
 
-      // 添加错误标注和内联建议
+      // 添加错误标注
       parts.push(
         <span key={error.id} className="relative inline-block">
-          {/* 错误文本标注 */}
-          {editingState?.errorId === error.id ? (
-            // 编辑模式
-            <span className="inline-flex items-center bg-blue-50 border-2 border-blue-300 rounded-lg px-2 py-1">
-              <input
-                type="text"
-                value={editingState.content}
-                onChange={(e) => setEditingState({ ...editingState, content: e.target.value })}
-                className="bg-transparent border-none outline-none text-sm font-medium text-blue-900 min-w-0 flex-1"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') saveEdit();
-                  if (e.key === 'Escape') cancelEdit();
-                }}
-                style={{ width: `${Math.max(editingState.content.length * 8, 60)}px` }}
-              />
-              <div className="flex items-center space-x-1 ml-2">
-                <button
-                  onClick={saveEdit}
-                  className="px-2 py-1 bg-green-500 text-white text-xs rounded-md hover:bg-green-600 transition-colors flex items-center space-x-1"
-                  title="保存修改 (Enter)"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span>保存</span>
-                </button>
-                <button
-                  onClick={cancelEdit}
-                  className="px-2 py-1 bg-gray-400 text-white text-xs rounded-md hover:bg-gray-500 transition-colors flex items-center space-x-1"
-                  title="取消编辑 (Escape)"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  <span>取消</span>
-                </button>
-              </div>
+          {/* 错误文本标注 - 优化版本 */}
+          <span
+            className={`relative inline-block px-2 py-1 rounded-md cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-105 ${
+              error.type === 'error' 
+                ? 'bg-red-100 text-red-800 border-b-2 border-red-500 hover:bg-red-200' 
+                : error.type === 'warning' 
+                ? 'bg-yellow-100 text-yellow-800 border-b-2 border-yellow-500 hover:bg-yellow-200' 
+                : 'bg-green-100 text-green-800 border-b-2 border-green-500 hover:bg-green-200'
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              showFloatingMenu(error.id, e);
+            }}
+            title={`${error.category}: ${error.reason} (点击查看菜单)`}
+          >
+            <span className="relative">
+              {error.original}
+              {/* 错误类型指示器 - 更明显的设计 */}
+              <span className={`absolute -top-2 -right-2 w-3 h-3 rounded-full border-2 border-white ${
+                error.type === 'error' ? 'bg-red-500' : 
+                error.type === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
+              } shadow-sm`}></span>
             </span>
-          ) : (
-            // 标注模式
-            <span
-              className={`${getErrorStyle(error.type)} px-2 py-1 rounded-md cursor-pointer relative group transition-all duration-200 hover:shadow-md hover:scale-105 border-l-4 ${
-                error.type === 'error' ? 'border-l-red-500' : 
-                error.type === 'warning' ? 'border-l-yellow-500' : 'border-l-green-500'
-              }`}
-              onClick={() => startEditing(error.id, error.original)}
-              title={`${error.category}: ${error.reason} (点击编辑)`}
-            >
-              <span className="relative">
-                {error.original}
-                {/* 错误类型指示器 */}
-                <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${
-                  error.type === 'error' ? 'bg-red-500' : 
-                  error.type === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
-                } opacity-75 animate-pulse`}></span>
-              </span>
-              
-              {/* 内联建议提示 */}
-              <span className={`absolute top-full left-0 mt-2 px-3 py-2 ${getSuggestionStyle(error.type)} rounded-lg shadow-xl text-xs z-20 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0 min-w-max max-w-sm`}>
-                <div className="flex flex-col space-y-2">
-                  {/* 建议内容 */}
-                  <div className="flex items-center space-x-2">
-                    <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                    <span className="font-medium">建议: {error.suggestion}</span>
-                  </div>
-                  
-                  {/* 错误原因 */}
-                  <div className="text-xs opacity-75 border-t pt-1">
-                    {error.reason}
-                  </div>
-                  
-                  {/* RAG增强信息 */}
-                  {isUsingRAG && ragResults && (
-                    <div className="text-xs opacity-60 border-t pt-1">
-                      <span className="text-blue-600">RAG增强</span>
-                      {ragResults.knowledge_used.length > 0 && (
-                        <span className="ml-1">· 基于专业知识库</span>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* 操作按钮 */}
-                  <div className="flex items-center space-x-2 pt-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        applyCorrection(error.id);
-                      }}
-                      className="flex-1 px-3 py-1.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-xs font-medium flex items-center justify-center space-x-1"
-                      title="应用建议"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span>应用</span>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        ignoreError(error.id);
-                      }}
-                      className="flex-1 px-3 py-1.5 bg-gray-400 text-white rounded-md hover:bg-gray-500 transition-colors text-xs font-medium flex items-center justify-center space-x-1"
-                      title="忽略建议"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      <span>忽略</span>
-                    </button>
-                  </div>
-                </div>
-                
-                {/* 箭头指示器 */}
-                <div className="absolute -top-2 left-3 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-current"></div>
-              </span>
-            </span>
-          )}
+          </span>
         </span>
       );
 
       lastIndex = error.position.end;
+      console.log(`  更新lastIndex: ${lastIndex}`);
     });
 
-    // 添加最后的正常文本
-    if (lastIndex < documentContent.length) {
+    // 添加替换后的内容（蓝色标注）
+    replacedContents.forEach((replaced, index) => {
       parts.push(
-        <span key="text_final">
-          {documentContent.slice(lastIndex)}
+        <span key={`replaced_${replaced.id}`} className="relative inline-block">
+          <span
+            className="inline-block px-2 py-1 rounded-md bg-blue-100 text-blue-800 border-b-2 border-blue-500 cursor-help"
+            title={`已替换: "${replaced.original}" -> "${replaced.replaced}"`}
+          >
+            <span className="relative">
+              {replaced.replaced}
+              {/* 替换成功指示器 */}
+              <span className="absolute -top-2 -right-2 w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm">
+                <svg className="w-2 h-2 text-white absolute top-0.5 left-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </span>
+            </span>
+          </span>
         </span>
+      );
+    });
+
+    // 确保添加最后的正常文本
+    console.log(`\n处理最后的正常文本:`);
+    console.log(`  最终lastIndex: ${lastIndex}, 文档长度: ${documentContent.length}`);
+    
+    if (lastIndex < documentContent.length) {
+      const finalText = documentContent.slice(lastIndex);
+      console.log(`  最后文本 [${lastIndex}-${documentContent.length}]: "${finalText}"`);
+      
+      if (finalText) {
+        parts.push(
+          <span key="text_final" className="text-gray-900">
+            {finalText}
+          </span>
+        );
+        console.log(`  ✅ 添加最后文本到parts`);
+      }
+    }
+
+    console.log(`🎯 最终Parts数组长度: ${parts.length}`);
+
+    // 特殊情况：如果错误覆盖了整个或大部分文档，确保显示完整内容
+    const hasFullDocumentError = sortedErrors.some(error => 
+      error.position.start === 0 && error.position.end >= documentContent.length * 0.9
+    );
+
+    // 添加fallback逻辑：如果parts数组为空或内容不完整，显示原始文档
+    const shouldShowFallback = parts.length === 0 || 
+      (parts.length === 1 && sortedErrors.length > 0) ||
+      hasFullDocumentError;
+
+    if (shouldShowFallback) {
+      console.log('🔄 使用fallback显示完整文档内容');
+      return (
+        <div className="space-y-6 relative">
+          {/* 分析结果概览 */}
+          <div className="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl p-5 mb-6 shadow-sm">
+            <div className="flex items-center space-x-3 mb-2">
+              <div className="flex-shrink-0">
+                <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-orange-800 font-semibold text-lg">📋 分析完成</h3>
+                <p className="text-orange-700 text-sm mt-1">
+                  {isUsingRAG ? `✨ 基于RAG知识库分析，发现 ${sortedErrors.length} 个问题` : `🎯 基础AI分析完成，发现 ${sortedErrors.length} 个问题`}
+                  {replacedContents.length > 0 && (
+                    <span className="ml-2 text-blue-700">
+                      · 已替换 <strong>{replacedContents.length}</strong> 处
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            
+            {/* 错误统计和RAG信息 */}
+            <div className="mt-3 pt-3 border-t border-orange-200">
+              <div className="flex items-center space-x-6 text-sm">
+                {(() => {
+                  // 直接计算错误统计，避免函数调用可能的循环依赖
+                  const errorCount = errors.filter(e => e.type === 'error').length;
+                  const warningCount = errors.filter(e => e.type === 'warning').length;
+                  const suggestionCount = errors.filter(e => e.type === 'suggestion').length;
+                  
+                  return (
+                    <>
+                      {errorCount > 0 && <span className="text-red-600">❌ 错误: <strong>{errorCount}</strong></span>}
+                      {warningCount > 0 && <span className="text-yellow-600">⚠️ 警告: <strong>{warningCount}</strong></span>}
+                      {suggestionCount > 0 && <span className="text-green-600">💡 建议: <strong>{suggestionCount}</strong></span>}
+                      
+                      {/* RAG信息 */}
+                      {isUsingRAG && ragResults && (
+                        <>
+                          <span className="text-blue-600">🎯 领域: <strong>{ragResults.domain_info?.domain || '通用'}</strong></span>
+                          <span className="text-blue-700">RAG置信度: </span>
+                          <span className="font-medium text-blue-900">{Math.round((ragResults.domain_info.confidence || 0) * 100)}%</span>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+
+          {/* 文档内容（含标注） - Fallback版本 */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <div className="mb-4 pb-3 border-b border-gray-200">
+              <h4 className="text-lg font-semibold text-gray-900 flex items-center">
+                <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                文档内容（含标注）
+              </h4>
+              <div className="flex items-center space-x-4 text-sm text-gray-600 mt-2">
+                <span>字符数: <strong>{documentContent.length}</strong></span>
+                {errors.length > 0 && (
+                  <span>问题数: <strong className="text-red-600">{errors.length}</strong></span>
+                )}
+                {replacedContents.length > 0 && (
+                  <span>已替换: <strong className="text-blue-600">{replacedContents.length}</strong></span>
+                )}
+                <span className="text-orange-600">显示模式: <strong>完整文档</strong></span>
+              </div>
+            </div>
+            
+            <div className="prose max-w-none">
+              <div className="whitespace-pre-wrap text-gray-900 leading-relaxed text-base" style={{ lineHeight: '1.8' }}>
+                {documentContent}
+              </div>
+            </div>
+            
+            {/* 错误列表提示 */}
+            {sortedErrors.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <svg className="w-5 h-5 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    <div>
+                      <h5 className="text-yellow-800 font-medium">检测到 {sortedErrors.length} 个问题</h5>
+                      <p className="text-yellow-700 text-sm mt-1">
+                        由于标注复杂度，当前显示完整文档。请查看右侧边栏查看具体错误详情。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       );
     }
 
-    return <div className="whitespace-pre-wrap leading-relaxed">{parts}</div>;
+    // 正常情况：显示带有标注的文档内容
+    return (
+      <div className="space-y-6 relative">
+        {/* 分析结果概览 - 有错误状态 */}
+        <div className="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl p-5 mb-6 shadow-sm">
+          <div className="flex items-center space-x-3 mb-2">
+            <div className="flex-shrink-0">
+              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.732 15.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-orange-800 font-semibold text-lg">📋 分析完成</h3>
+              <p className="text-orange-700 text-sm mt-1">
+                {isUsingRAG ? `✨ 基于RAG知识库分析，发现 ${sortedErrors.length} 个问题` : `🎯 基础AI分析完成，发现 ${sortedErrors.length} 个问题`}
+                {replacedContents.length > 0 && (
+                  <span className="ml-2 text-blue-700">
+                    · 已替换 <strong>{replacedContents.length}</strong> 处
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          
+          {/* 错误统计和RAG信息 */}
+          <div className="mt-3 pt-3 border-t border-orange-200">
+            <div className="flex items-center space-x-6 text-sm">
+              {(() => {
+                // 直接计算错误统计，避免函数调用可能的循环依赖
+                const errorCount = errors.filter(e => e.type === 'error').length;
+                const warningCount = errors.filter(e => e.type === 'warning').length;
+                const suggestionCount = errors.filter(e => e.type === 'suggestion').length;
+                
+                return (
+                  <>
+                    {errorCount > 0 && <span className="text-red-600">❌ 错误: <strong>{errorCount}</strong></span>}
+                    {warningCount > 0 && <span className="text-yellow-600">⚠️ 警告: <strong>{warningCount}</strong></span>}
+                    {suggestionCount > 0 && <span className="text-green-600">💡 建议: <strong>{suggestionCount}</strong></span>}
+                    
+                    {/* RAG信息 */}
+                    {isUsingRAG && ragResults && (
+                      <>
+                        <span className="text-blue-600">🎯 领域: <strong>{ragResults.domain_info?.domain || '通用'}</strong></span>
+                        <span className="text-blue-700">RAG置信度: </span>
+                        <span className="font-medium text-blue-900">{Math.round((ragResults.domain_info.confidence || 0) * 100)}%</span>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+
+        {/* 文档内容（含标注） */}
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <div className="prose max-w-none">
+            <div className="whitespace-pre-wrap text-gray-900 leading-relaxed text-base" style={{ lineHeight: '1.8' }}>
+              {parts}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // 获取错误统计
@@ -618,6 +1083,18 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
     });
   }, [documentContent]);
 
+  // 更新文档统计
+  useEffect(() => {
+    if (documentContent) {
+      setDocumentStats(prev => ({
+        ...prev,
+        originalLength: content.length,
+        currentLength: documentContent.length,
+        charactersProcessed: documentContent.length
+      }));
+    }
+  }, [documentContent, content]);
+
   const stats = getErrorStats();
   const categories = getCategories();
   const filteredErrors = getFilteredErrors();
@@ -648,11 +1125,6 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                 />
                 <span className="text-sm text-blue-600 font-medium">RAG增强</span>
               </label>
-              {ragResults && isUsingRAG && (
-                <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                  {ragResults.domain_info.domain} · {(ragResults.rag_confidence * 100).toFixed(0)}%
-                </div>
-              )}
             </div>
           </div>
           
@@ -705,12 +1177,11 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                   <div>
                     <span className="text-blue-700">检测领域: </span>
                     <span className="font-medium text-blue-900">{ragResults.domain_info.domain}</span>
-                    <span className="text-blue-600 ml-1">({(ragResults.domain_info.confidence * 100).toFixed(0)}%)</span>
                   </div>
                   
                   <div>
                     <span className="text-blue-700">RAG置信度: </span>
-                    <span className="font-medium text-blue-900">{(ragResults.rag_confidence * 100).toFixed(0)}%</span>
+                    <span className="font-medium text-blue-900">{Math.round((ragResults.domain_info.confidence || 0) * 100)}%</span>
                   </div>
                   
                   {ragResults.fallback_used && (
@@ -728,7 +1199,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                       </svg>
                       <span className="text-purple-700 text-xs">专属知识库: </span>
-                      <span className="font-medium text-purple-900 text-xs">{ragResults.knowledge_sources.private_count}条</span>
+                      <span className="font-medium text-purple-900 text-xs">{ragResults.knowledge_sources.private_count || 0}条</span>
                     </div>
                     
                     <div className="flex items-center space-x-2">
@@ -736,7 +1207,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
                       </svg>
                       <span className="text-green-700 text-xs">共享知识库: </span>
-                      <span className="font-medium text-green-900 text-xs">{ragResults.knowledge_sources.shared_count}条</span>
+                      <span className="font-medium text-green-900 text-xs">{ragResults.knowledge_sources.shared_count || 0}条</span>
                     </div>
                     
                     <div className="flex items-center space-x-2">
@@ -744,7 +1215,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                       </svg>
                       <span className="text-blue-700 text-xs">总计应用: </span>
-                      <span className="font-medium text-blue-900 text-xs">{ragResults.knowledge_sources.total_count}条</span>
+                      <span className="font-medium text-blue-900 text-xs">{ragResults.knowledge_sources.total_count || (ragResults.knowledge_used?.length || 0)}条</span>
                     </div>
                   </div>
                 )}
@@ -786,18 +1257,32 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
         )}
 
         {/* 使用说明 */}
-        <div className="bg-blue-50 border-b border-blue-200 p-3">
-          <div className="flex items-center space-x-2 text-sm text-blue-800">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>
-              <strong>使用说明:</strong> 
-              {isUsingRAG ? 'RAG增强模式已启用，基于专业知识库提供更精确的纠错建议' : '使用基础AI分析模式'} → 
-              悬停彩色标注查看建议 → 点击&quot;应用&quot;一键替换 → 点击&quot;忽略&quot;跳过建议 → 直接点击标注文字进行自定义编辑
-            </span>
+        <div className="bg-blue-50 border-b border-blue-200 p-4">
+          {/* 第一行：主要说明和文档统计 */}
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-start space-x-2 text-sm text-blue-800 flex-1 pr-4">
+              <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <div className="font-medium mb-1">使用说明:</div>
+                <div className="text-xs leading-relaxed">
+                  {isUsingRAG ? 'RAG增强模式已启用，基于专业知识库提供更精确的纠错建议' : '使用基础AI分析模式'}
+                  <br />点击彩色标注查看建议 → 浮动菜单操作 → 一键替换或编辑
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-blue-700 mb-1">文档统计</div>
+              <div className="flex flex-col space-y-1 text-xs text-blue-700">
+                <span>原文: <strong>{content.length}</strong> 字符</span>
+                <span>当前: <strong>{documentContent.length}</strong> 字符</span>
+              </div>
+            </div>
           </div>
-          <div className="mt-2 flex items-center space-x-4 text-xs text-blue-700">
+          
+          {/* 第二行：标注说明 */}
+          <div className="flex items-center space-x-6 text-xs text-blue-700">
             <div className="flex items-center space-x-1">
               <div className="w-3 h-3 bg-red-100 border-l-2 border-red-500 rounded"></div>
               <span>确定错误</span>
@@ -810,11 +1295,40 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
               <div className="w-3 h-3 bg-green-100 border-l-2 border-green-500 rounded"></div>
               <span>优化建议</span>
             </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-blue-100 border-l-2 border-blue-500 rounded"></div>
+              <span>已替换内容</span>
+            </div>
           </div>
         </div>
 
         {/* 文档内容区 */}
         <div className="flex-1 bg-white overflow-hidden flex flex-col">
+          {/* 文档内容标题栏 */}
+          <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h4 className="text-lg font-semibold text-gray-900">文档内容（含标注）</h4>
+              </div>
+              <div className="flex items-center space-x-4 text-sm text-gray-600">
+                {documentContent && (
+                  <>
+                    <span>字符数: <strong>{documentContent.length}</strong></span>
+                    {errors.length > 0 && (
+                      <span>问题数: <strong className="text-red-600">{errors.length}</strong></span>
+                    )}
+                    {replacedContents.length > 0 && (
+                      <span>已替换: <strong className="text-blue-600">{replacedContents.length}</strong></span>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+          
           <div className="flex-1 overflow-y-auto">
             <div className="h-full p-6">
               <div className="max-w-4xl mx-auto h-full">
@@ -987,6 +1501,76 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
           </div>
         </div>
       </div>
+
+      {/* 浮动纠错菜单 */}
+      {floatingMenu.isVisible && floatingMenu.errorId && (
+        <div
+          className="fixed z-50 bg-white border border-gray-300 rounded-lg shadow-xl py-2 min-w-48"
+          style={{
+            left: floatingMenu.position.x - 96, // 居中显示
+            top: floatingMenu.position.y - 10,
+            transform: 'translateY(-100%)'
+          }}
+          onMouseLeave={hideFloatingMenu}
+        >
+          {/* 菜单箭头 */}
+          <div 
+            className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full"
+            style={{ 
+              width: 0, 
+              height: 0, 
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderTop: '6px solid white'
+            }}
+          ></div>
+          
+          {/* 菜单项 */}
+          <div className="px-3 py-2 border-b border-gray-100">
+            <div className="text-xs text-gray-500 font-medium">纠错菜单</div>
+          </div>
+          
+          <button
+            onClick={() => editSuggestion(floatingMenu.errorId!)}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 flex items-center space-x-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            <span>编辑正确提示内容</span>
+          </button>
+          
+          <button
+            onClick={() => replaceWithSuggestion(floatingMenu.errorId!)}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-green-50 hover:text-green-700 flex items-center space-x-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            <span>替换</span>
+          </button>
+          
+          <button
+            onClick={() => ignoreError(floatingMenu.errorId!)}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-yellow-50 hover:text-yellow-700 flex items-center space-x-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L12 12m6.121-6.121A3 3 0 1015.121 9.879m0 0L21 3m-6.121 6.121L12 12" />
+            </svg>
+            <span>忽略</span>
+          </button>
+          
+          <button
+            onClick={() => showErrorDetails(floatingMenu.errorId!)}
+            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 hover:text-gray-700 flex items-center space-x-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>显示错误原因</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 } 

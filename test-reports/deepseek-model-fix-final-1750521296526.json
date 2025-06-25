@@ -1,0 +1,42 @@
+{
+  "testName": "DeepSeek模型错误修复最终验证",
+  "timestamp": "2025-06-21T15:54:56.526Z",
+  "duration": 8393,
+  "results": {
+    "tests": [
+      {
+        "name": "localAPIStatus",
+        "status": "passed"
+      },
+      {
+        "name": "modelConfig",
+        "status": "passed"
+      },
+      {
+        "name": "connectionTest",
+        "status": "passed"
+      },
+      {
+        "name": "healthCheck",
+        "status": "passed"
+      },
+      {
+        "name": "noDeepseekChatError",
+        "status": "passed"
+      },
+      {
+        "name": "actualAPICall",
+        "status": "passed"
+      }
+    ],
+    "passed": 6,
+    "failed": 0,
+    "startTime": 1750521288133
+  },
+  "summary": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0,
+    "successRate": "100.0%"
+  }
+}

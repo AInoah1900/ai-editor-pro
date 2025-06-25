@@ -41,21 +41,85 @@ export default function KnowledgeAdminPage() {
 
   // 获取知识库统计
   const fetchStats = async () => {
+    console.log('🔄 开始获取知识库统计...');
     try {
-      const response = await fetch('/api/knowledge-base');
+      // 获取知识库统计数据
+      const statsResponse = await fetch('/api/knowledge-base?action=getLibraryStats');
+      console.log('📊 统计API响应状态:', statsResponse.status);
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (!statsResponse.ok) {
+        throw new Error(`HTTP ${statsResponse.status}: ${statsResponse.statusText}`);
       }
       
-      const result = await response.json();
-      if (result.success) {
-        setStats(result.data);
-      } else {
-        throw new Error(result.error || '未知错误');
+      const statsResult = await statsResponse.json();
+      console.log('📊 基础统计数据:', statsResult);
+      
+      if (!statsResult.success) {
+        throw new Error(statsResult.error || '获取统计失败');
       }
+      
+      // 获取知识项数据以计算详细统计
+      const knowledgeResponse = await fetch('/api/knowledge-base?query=&limit=100');
+      console.log('📚 知识项API响应状态:', knowledgeResponse.status);
+      
+      if (!knowledgeResponse.ok) {
+        throw new Error(`HTTP ${knowledgeResponse.status}: ${knowledgeResponse.statusText}`);
+      }
+      
+      const knowledgeResult = await knowledgeResponse.json();
+      console.log('📚 知识项数据:', knowledgeResult);
+      
+      if (!knowledgeResult.success) {
+        throw new Error(knowledgeResult.error || '获取知识项失败');
+      }
+      
+      // 计算统计数据
+      const knowledgeItems = knowledgeResult.knowledge_items || [];
+      console.log('📝 知识项数量:', knowledgeItems.length);
+      
+      const domains: Record<string, number> = {};
+      const types: Record<string, number> = {};
+      
+      knowledgeItems.forEach((item: any, index: number) => {
+        console.log(`📋 知识项 ${index + 1}:`, {
+          domain: item.domain,
+          type: item.type,
+          content: item.content?.substring(0, 30) + '...'
+        });
+        
+        // 统计领域分布
+        if (item.domain) {
+          domains[item.domain] = (domains[item.domain] || 0) + 1;
+        }
+        
+        // 统计类型分布
+        if (item.type) {
+          types[item.type] = (types[item.type] || 0) + 1;
+        }
+      });
+      
+      console.log('🏷️ 领域分布:', domains);
+      console.log('📂 类型分布:', types);
+      
+      // 组合统计数据
+      const combinedStats: KnowledgeStats = {
+        total_knowledge_items: knowledgeItems.length,
+        total_files: statsResult.stats.total_private + statsResult.stats.total_shared,
+        domains,
+        types,
+        last_updated: new Date().toISOString(),
+        vector_stats: {
+          vectors_count: knowledgeItems.length,
+          points_count: knowledgeItems.length
+        }
+      };
+      
+      console.log('✅ 最终统计数据:', combinedStats);
+      setStats(combinedStats);
+      setMessage('✅ 统计数据加载成功！');
+      
     } catch (error) {
-      console.error('获取统计失败:', error);
+      console.error('❌ 获取统计失败:', error);
       setMessage(`❌ 获取统计失败: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
@@ -202,7 +266,7 @@ export default function KnowledgeAdminPage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               🔬 按领域分布
             </h3>
-            {stats && stats.domains ? (
+            {stats && stats.domains && Object.keys(stats.domains).length > 0 ? (
               <div className="space-y-2">
                 {Object.entries(stats.domains).map(([domain, count]) => (
                   <div key={domain} className="flex justify-between text-sm">
@@ -220,7 +284,7 @@ export default function KnowledgeAdminPage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               📚 按类型分布
             </h3>
-            {stats && stats.types ? (
+            {stats && stats.types && Object.keys(stats.types).length > 0 ? (
               <div className="space-y-2">
                 {Object.entries(stats.types).map(([type, count]) => (
                   <div key={type} className="flex justify-between text-sm">
@@ -420,7 +484,7 @@ export default function KnowledgeAdminPage() {
             </div>
             <div>
               <span className="text-gray-600">向量维度:</span>
-              <span className="ml-2 font-mono text-purple-600">1024</span>
+                              <span className="ml-2 font-mono text-purple-600">4096</span>
             </div>
             <div>
               <span className="text-gray-600">相似度算法:</span>

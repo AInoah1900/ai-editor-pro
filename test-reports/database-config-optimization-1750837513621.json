@@ -1,0 +1,143 @@
+{
+  "timestamp": "2025-06-25T07:45:13.613Z",
+  "tests": [
+    {
+      "name": ".env.local文件存在性检查",
+      "passed": true,
+      "details": "文件存在",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.619Z"
+    },
+    {
+      "name": "PostgreSQL环境变量 POSTGRES_HOST",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.619Z"
+    },
+    {
+      "name": "PostgreSQL环境变量 POSTGRES_PORT",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.620Z"
+    },
+    {
+      "name": "PostgreSQL环境变量 POSTGRES_DB",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.620Z"
+    },
+    {
+      "name": "PostgreSQL环境变量 POSTGRES_USER",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.620Z"
+    },
+    {
+      "name": "PostgreSQL环境变量 POSTGRES_PASSWORD",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.620Z"
+    },
+    {
+      "name": "PostgreSQL环境变量 POSTGRES_MAX_CONNECTIONS",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.620Z"
+    },
+    {
+      "name": "PostgreSQL环境变量 POSTGRES_IDLE_TIMEOUT",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.620Z"
+    },
+    {
+      "name": "PostgreSQL环境变量 POSTGRES_CONNECTION_TIMEOUT",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.620Z"
+    },
+    {
+      "name": "Qdrant环境变量 QDRANT_URL",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.620Z"
+    },
+    {
+      "name": "Qdrant环境变量 QDRANT_TIMEOUT",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.620Z"
+    },
+    {
+      "name": "Qdrant环境变量 QDRANT_COLLECTION_NAME",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.620Z"
+    },
+    {
+      "name": "Qdrant环境变量 QDRANT_VECTOR_SIZE",
+      "passed": true,
+      "details": "已配置",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.620Z"
+    },
+    {
+      "name": "PostgreSQL模型文件环境变量配置",
+      "passed": true,
+      "details": "已使用环境变量",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.621Z"
+    },
+    {
+      "name": "PostgreSQL硬编码配置移除",
+      "passed": true,
+      "details": "硬编码已移除",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.621Z"
+    },
+    {
+      "name": "Qdrant客户端文件环境变量配置",
+      "passed": true,
+      "details": "已使用环境变量",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.621Z"
+    },
+    {
+      "name": "Qdrant硬编码配置移除",
+      "passed": true,
+      "details": "硬编码已移除",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.621Z"
+    },
+    {
+      "name": "PostgreSQL配置读取测试",
+      "passed": true,
+      "details": "Host: localhost, Port: 5432, DB: postgres",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.621Z"
+    },
+    {
+      "name": "Qdrant配置读取测试",
+      "passed": true,
+      "details": "URL: http://localhost:6333, Timeout: 600000ms, Vector Size: 4096",
+      "error": null,
+      "timestamp": "2025-06-25T07:45:13.621Z"
+    }
+  ],
+  "summary": {
+    "total": 19,
+    "passed": 19,
+    "failed": 0
+  }
+}

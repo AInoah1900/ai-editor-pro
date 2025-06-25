@@ -221,7 +221,7 @@ async function demoAllFeatures() {
   console.log(`\n🌟 主要特色:`);
   console.log(`   • 6大专业领域支持 (学术、医学、法律、技术、商业、通用)`);
   console.log(`   • 多类型知识管理 (术语、规则、示例、纠错)`);
-  console.log(`   • 向量语义搜索 (1024维向量空间)`);
+        console.log(`   • 向量语义搜索 (4096维向量空间)`);
   console.log(`   • 文档在线管理 (预览、下载、元数据)`);
   console.log(`   • DeepSeek API集成 (适合国内网络环境)`);
   console.log(`   • Docker容器化部署 (一键启动)`);

@@ -1,0 +1,32 @@
+{
+  "timestamp": "2025-06-24T10:16:26.983Z",
+  "testConfig": {
+    "temperature": 0.3,
+    "max_tokens": 32000,
+    "response_format": {
+      "type": "json_object"
+    }
+  },
+  "results": [
+    {
+      "name": "基础文档分析",
+      "success": true,
+      "duration": "135.8",
+      "errorCount": 3,
+      "responseSize": 499
+    },
+    {
+      "name": "RAG增强分析",
+      "success": true,
+      "duration": "97.4",
+      "errorCount": 1,
+      "responseSize": 616
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "success": 2,
+    "failed": 0,
+    "successRate": 100
+  }
+}

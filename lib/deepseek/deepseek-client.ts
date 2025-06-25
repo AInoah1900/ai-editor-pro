@@ -62,7 +62,7 @@ export class DeepSeekClient {
     const url = `${this.baseURL}/chat/completions`;
     
     const requestBody = {
-      model: request.model || 'deepseek-chat',
+      model: request.model || 'deepseek-r1:8b',
       messages: request.messages,
       temperature: request.temperature ?? 0.1,
       max_tokens: request.max_tokens ?? 4000,
@@ -106,7 +106,7 @@ export class DeepSeekClient {
    * 基于语义特征和统计特征的混合方法
    */
   private generateAdvancedEmbedding(text: string): number[] {
-    const dimension = 1024;
+    const dimension = 4096;
     const embedding = new Array(dimension).fill(0);
     
     // 1. 基础文本特征
@@ -317,7 +317,7 @@ export class DeepSeekClient {
   async healthCheck(): Promise<boolean> {
     try {
       const response = await this.createChatCompletion({
-        model: 'deepseek-chat',
+        model: 'deepseek-r1:8b',
         messages: [{ role: 'user', content: 'Hi' }],
         max_tokens: 10
       });
@@ -347,5 +347,5 @@ export const DEFAULT_DEEPSEEK_CONFIG = {
   baseURL: 'https://api.deepseek.com/v1',
   timeout: 30000,
   maxRetries: 3,
-  model: 'deepseek-chat'
+  model: 'deepseek-r1:8b'
 } as const; 

@@ -1,0 +1,37 @@
+{
+  "timestamp": "2025-06-24T07:21:39.822Z",
+  "test_results": [
+    {
+      "test": "ConfigManager",
+      "success": false,
+      "description": "DeepSeek配置管理器功能测试"
+    },
+    {
+      "test": "DualClient",
+      "success": false,
+      "description": "双DeepSeek客户端功能测试"
+    },
+    {
+      "test": "APISwitch",
+      "success": false,
+      "description": "API提供商切换功能测试"
+    },
+    {
+      "test": "ConfigAPI",
+      "success": true,
+      "description": "配置API端点功能测试"
+    }
+  ],
+  "summary": {
+    "total_tests": 4,
+    "passed": 1,
+    "failed": 3,
+    "success_rate": "25%"
+  },
+  "recommendations": [
+    "配置DEEPSEEK_API_KEY环境变量以启用云端API",
+    "启动本地模型服务 (http://localhost:11434) 以启用本地API",
+    "使用DEEPSEEK_PROVIDER环境变量设置默认提供商",
+    "通过配置API端点动态切换提供商"
+  ]
+}

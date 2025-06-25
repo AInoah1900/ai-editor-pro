@@ -1,0 +1,37 @@
+{
+  "errors": [
+    {
+      "id": "rag_error_1750645436519_0_gbl142koy",
+      "type": "warning",
+      "position": {
+        "start": 0,
+        "end": 32
+      },
+      "original": "这是一个测试文档，用于验证多知识库检索功能。",
+      "suggestion": "建议补充具体的测试步骤和验证方法，例如：\n1. 准备测试环境\n2. 执行知识库检索\n3. 验证检索结果\n4. 记录测试数据",
+      "reason": "技术文档应当包含清晰的步骤说明，每个步骤都应该可以独立验证（来源：专属知识库）",
+      "category": "文档完整性"
+    }
+  ],
+  "domain_info": {
+    "domain": "technical",
+    "confidence": 1,
+    "keywords": [
+      "测试"
+    ]
+  },
+  "knowledge_used": [
+    "技术文档应当包含清晰的步骤说明，每个步骤都应该可以独立验证。"
+  ],
+  "rag_confidence": 0.95,
+  "fallback_used": false,
+  "knowledge_sources": {
+    "private_count": 1,
+    "shared_count": 1,
+    "total_count": 2
+  },
+  "document_sources": {
+    "private_documents": [],
+    "shared_documents": []
+  }
+}
