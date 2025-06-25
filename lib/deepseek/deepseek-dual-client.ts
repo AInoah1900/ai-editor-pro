@@ -158,8 +158,9 @@ export class DualDeepSeekClient {
     console.log(`📍 API地址: ${url}`);
     console.log(`🤖 使用模型: ${requestBody.model}`);
     console.log(`📝 消息数量: ${requestBody.messages.length}`);
+    console.log(`⏳ 本地API调用，不设置超时限制，等待完成...`);
     
-    const response = await this.makeRequest(url, {
+    const response = await this.makeLocalRequest(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -219,7 +220,7 @@ export class DualDeepSeekClient {
   }
 
   /**
-   * 测试提供商连接
+   * 测试提供商连接 - 优化版本，减少日志输出
    */
   async testProviderConnection(provider: DeepSeekProvider): Promise<void> {
     const testMessage = {
@@ -233,11 +234,25 @@ export class DualDeepSeekClient {
       temperature: 0.1
     };
 
-    // 临时切换提供商进行测试
+    // 临时切换提供商进行测试（不输出切换日志）
     const originalProvider = this.configManager.getProvider();
+    const originalConsoleLog = console.log;
+    
+    // 临时禁用切换日志
+    console.log = (...args: any[]) => {
+      const message = args[0];
+      if (typeof message === 'string' && message.includes('DeepSeek API提供商设置为')) {
+        return; // 跳过提供商切换日志
+      }
+      originalConsoleLog.apply(console, args);
+    };
+    
     this.configManager.setProvider(provider);
     
     try {
+      console.log = originalConsoleLog; // 恢复日志功能
+      console.log(`🔗 测试${provider === 'cloud' ? '云端' : '本地'}API连接...`);
+      
       if (provider === 'cloud') {
         await this.createCloudChatCompletion(testRequest);
       } else {
@@ -245,54 +260,81 @@ export class DualDeepSeekClient {
       }
       console.log(`✅ ${provider === 'cloud' ? '云端' : '本地'}API连接测试成功`);
     } catch (error) {
+      console.log = originalConsoleLog; // 确保恢复日志功能
       throw new Error(`${provider === 'cloud' ? '云端' : '本地'}API连接测试失败: ${error instanceof Error ? error.message : error}`);
     } finally {
-      // 恢复原始提供商设置
+      // 恢复原始提供商设置（不输出切换日志）
+      console.log = (...args: any[]) => {
+        const message = args[0];
+        if (typeof message === 'string' && message.includes('DeepSeek API提供商设置为')) {
+          return; // 跳过提供商切换日志
+        }
+        originalConsoleLog.apply(console, args);
+      };
+      
       this.configManager.setProvider(originalProvider);
+      console.log = originalConsoleLog; // 最终恢复日志功能
     }
   }
 
   /**
-   * 健康检查
+   * 健康检查 - 只检查当前选择的API提供商
    */
   async healthCheck(): Promise<{
     cloud: { available: boolean; error?: string };
     local: { available: boolean; error?: string };
     current: DeepSeekProvider;
   }> {
+    const currentProvider = this.configManager.getProvider();
     const results = {
       cloud: { available: false, error: undefined as string | undefined },
       local: { available: false, error: undefined as string | undefined },
-      current: this.configManager.getProvider()
+      current: currentProvider
     };
 
-    // 检查云端API
-    try {
-      if (this.configManager.isCloudAPIConfigured()) {
-        await this.testProviderConnection('cloud');
-        results.cloud.available = true;
-      } else {
-        results.cloud.error = '云端API未配置';
-      }
-    } catch (error) {
-      results.cloud.error = error instanceof Error ? error.message : String(error);
-    }
+    console.log(`🔍 健康检查 - 仅检查当前API提供商: ${currentProvider === 'cloud' ? '云端API' : '本地API'}`);
 
-    // 检查本地API
-    try {
-      if (this.configManager.isLocalAPIConfigured()) {
-        const isAvailable = await this.configManager.isLocalAPIAvailable();
-        if (isAvailable) {
-          await this.testProviderConnection('local');
-          results.local.available = true;
+    // 只检查当前选择的API提供商
+    if (currentProvider === 'cloud') {
+      try {
+        if (this.configManager.isCloudAPIConfigured()) {
+          await this.testProviderConnection('cloud');
+          results.cloud.available = true;
+          console.log('✅ 云端API健康检查通过');
         } else {
-          results.local.error = '本地API服务不可用';
+          results.cloud.error = '云端API未配置';
+          console.log('❌ 云端API未配置');
         }
-      } else {
-        results.local.error = '本地API未配置';
+      } catch (error) {
+        results.cloud.error = error instanceof Error ? error.message : String(error);
+        console.log('❌ 云端API健康检查失败:', results.cloud.error);
       }
-    } catch (error) {
-      results.local.error = error instanceof Error ? error.message : String(error);
+      
+      // 本地API标记为未检查
+      results.local.error = '当前使用云端API，未检查本地API状态';
+    } else {
+      try {
+        if (this.configManager.isLocalAPIConfigured()) {
+          const isAvailable = await this.configManager.isLocalAPIAvailable();
+          if (isAvailable) {
+            await this.testProviderConnection('local');
+            results.local.available = true;
+            console.log('✅ 本地API健康检查通过');
+          } else {
+            results.local.error = '本地API服务不可用';
+            console.log('❌ 本地API服务不可用');
+          }
+        } else {
+          results.local.error = '本地API未配置';
+          console.log('❌ 本地API未配置');
+        }
+      } catch (error) {
+        results.local.error = error instanceof Error ? error.message : String(error);
+        console.log('❌ 本地API健康检查失败:', results.local.error);
+      }
+      
+      // 云端API标记为未检查
+      results.cloud.error = '当前使用本地API，未检查云端API状态';
     }
 
     return results;

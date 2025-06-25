@@ -22,6 +22,12 @@ export class LocalApiEmbeddingClient {
    */
   async generateEmbedding(text: string): Promise<number[]> {
     try {
+      // 检查空文本
+      if (!text || text.trim() === '') {
+        console.log('⚠️  检测到空文本，跳过本地API调用');
+        throw new Error('空文本无法生成嵌入向量');
+      }
+      
       console.log(`🔗 调用本地API生成嵌入向量: ${text.substring(0, 50)}...`);
       
       const response = await fetch(`${this.baseUrl}/api/embeddings`, {
@@ -97,7 +103,7 @@ export class LocalApiEmbeddingClient {
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`✅ 本地API服务正常: ${data.version || 'unknown version'}`);
+        console.log(`✅ 本地API服务正常: Ollama版本: ${data.version || 'unknown version'}`);
         return true;
       } else {
         console.log(`❌ 本地API服务异常: ${response.status} ${response.statusText}`);
@@ -129,7 +135,7 @@ export class LocalApiEmbeddingClient {
       const data = await response.json();
       const models = data.models || [];
       
-      const modelExists = models.some((model: any) => 
+      const modelExists = models.some((model: { name: string }) => 
         model.name === this.model || model.name.startsWith(this.model)
       );
 
@@ -138,7 +144,7 @@ export class LocalApiEmbeddingClient {
         return true;
       } else {
         console.log(`❌ 模型 ${this.model} 不可用`);
-        console.log(`可用模型: ${models.map((m: any) => m.name).join(', ')}`);
+        console.log(`可用模型: ${models.map((m: { name: string }) => m.name).join(', ')}`);
         return false;
       }
     } catch (error: unknown) {

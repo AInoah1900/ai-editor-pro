@@ -126,9 +126,7 @@ export async function POST(request: NextRequest) {
         const switchSuccess = await client.switchProvider(provider as DeepSeekProvider);
         
         if (switchSuccess) {
-          // 清除客户端缓存，确保下次使用新配置
-          clearDualDeepSeekClient();
-          
+          // 配置已在内存中更新，无需清除缓存
           return NextResponse.json({
             success: true,
             message: `成功切换到${provider === 'cloud' ? '云端' : '本地'}API`,
@@ -167,8 +165,7 @@ export async function POST(request: NextRequest) {
         // 更新配置
         if (config) {
           configManager.updateConfig(config);
-          // 清除客户端缓存
-          clearDualDeepSeekClient();
+          // 配置已在内存中更新，无需清除缓存
           return NextResponse.json({
             success: true,
             message: '配置更新成功'
@@ -183,8 +180,7 @@ export async function POST(request: NextRequest) {
       case 'reset':
         // 重置配置
         configManager.resetToDefaults();
-        // 清除客户端缓存
-        clearDualDeepSeekClient();
+        // 配置已重置，无需清除缓存
         return NextResponse.json({
           success: true,
           message: '配置已重置为默认值'

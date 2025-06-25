@@ -664,6 +664,28 @@ export class DatabaseModels {
   }
 
   /**
+   * 获取所有知识项（按创建时间排序）
+   */
+  async getAllKnowledgeItems(limit: number = 50): Promise<KnowledgeItem[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM knowledge_items 
+        ORDER BY created_at DESC 
+        LIMIT $1
+      `, [limit]);
+
+      return result.rows as KnowledgeItem[];
+    } catch (error) {
+      console.error('获取所有知识项失败:', error);
+      return [];
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * 获取知识项统计（按所有权类型）
    */
   async getKnowledgeItemsStats(): Promise<{

@@ -492,7 +492,7 @@ export default function KnowledgeAdminPage() {
             </div>
             <div>
               <span className="text-gray-600">嵌入模型:</span>
-              <span className="ml-2 font-mono text-indigo-600">OpenAI + 本地模拟</span>
+              <span className="ml-2 font-mono text-indigo-600">Ollama (deepseek-r1:8b) + 本地算法</span>
             </div>
             <div>
               <span className="text-gray-600">AI 模型:</span>

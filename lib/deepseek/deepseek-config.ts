@@ -45,14 +45,45 @@ export const DEFAULT_DEEPSEEK_CONFIG: DeepSeekAPIConfig = {
 };
 
 /**
+ * 全局配置状态 - 使用process.env存储，确保跨模块重载保持状态
+ */
+declare global {
+  var __DEEPSEEK_RUNTIME_PROVIDER: DeepSeekProvider | undefined;
+  var __DEEPSEEK_RUNTIME_PROVIDER_SET: boolean | undefined;
+}
+
+function getGlobalRuntimeProvider(): DeepSeekProvider | null {
+  return global.__DEEPSEEK_RUNTIME_PROVIDER || null;
+}
+
+function setGlobalRuntimeProvider(provider: DeepSeekProvider): void {
+  global.__DEEPSEEK_RUNTIME_PROVIDER = provider;
+  global.__DEEPSEEK_RUNTIME_PROVIDER_SET = true;
+}
+
+function isGlobalRuntimeProviderSet(): boolean {
+  return global.__DEEPSEEK_RUNTIME_PROVIDER_SET === true;
+}
+
+/**
  * DeepSeek配置管理器
  */
 export class DeepSeekConfigManager {
   private static instance: DeepSeekConfigManager;
   private config: DeepSeekAPIConfig;
+  private runtimeProviderSet: boolean = false;
 
   private constructor() {
     this.config = { ...DEFAULT_DEEPSEEK_CONFIG };
+    
+    // 从全局状态恢复运行时设置
+    if (isGlobalRuntimeProviderSet() && getGlobalRuntimeProvider()) {
+      const provider = getGlobalRuntimeProvider()!;
+      this.config.provider = provider;
+      this.runtimeProviderSet = true;
+      console.log(`🔄 从全局状态恢复配置中心设置: ${provider === 'cloud' ? '云端API' : '本地API'}`);
+    }
+    
     this.loadFromEnvironment();
   }
 
@@ -89,13 +120,15 @@ export class DeepSeekConfigManager {
       this.config.localConfig.model = process.env.DEEPSEEK_LOCAL_MODEL;
     }
 
-    // 加载提供商选择 - 覆盖运行时设置
-    if (process.env.DEEPSEEK_PROVIDER) {
+    // 加载提供商选择 - 仅作为默认值，不覆盖运行时设置
+    if (process.env.DEEPSEEK_PROVIDER && !this.runtimeProviderSet) {
       const provider = process.env.DEEPSEEK_PROVIDER.toLowerCase();
       if (provider === 'cloud' || provider === 'local') {
         this.config.provider = provider;
-        console.log(`🔧 从环境变量加载提供商配置: ${provider === 'cloud' ? '云端API' : '本地API'}`);
+        console.log(`🔧 从环境变量加载默认提供商配置: ${provider === 'cloud' ? '云端API' : '本地API'}`);
       }
+    } else if (this.runtimeProviderSet) {
+      console.log(`🎯 使用配置中心设置的提供商: ${this.config.provider === 'cloud' ? '云端API' : '本地API'}`);
     }
 
     // 加载超时配置 - 默认10分钟
@@ -125,10 +158,16 @@ export class DeepSeekConfigManager {
   }
 
   /**
-   * 设置提供商 - 由配置中心调用
+   * 设置提供商 - 由配置中心调用，优先级高于环境变量
    */
   public setProvider(provider: DeepSeekProvider): void {
     this.config.provider = provider;
+    // 标记为运行时设置，防止被环境变量覆盖
+    this.runtimeProviderSet = true;
+    
+    // 同步到全局状态，确保跨实例保持
+    setGlobalRuntimeProvider(provider);
+    
     console.log(`🔄 DeepSeek API提供商设置为: ${provider === 'cloud' ? '云端API' : '本地API'}`);
   }
 
@@ -288,7 +327,7 @@ export class DeepSeekConfigManager {
   }
 
   /**
-   * 获取状态报告
+   * 获取状态报告 - 只检查当前选择的API提供商
    */
   public async getStatusReport(): Promise<{
     currentProvider: DeepSeekProvider;
@@ -297,37 +336,53 @@ export class DeepSeekConfigManager {
     timeout: number;
     recommendations: string[];
   }> {
-    const cloudConfigured = this.isCloudAPIConfigured();
-    const localConfigured = this.isLocalAPIConfigured();
-    const localAvailable = localConfigured ? await this.isLocalAPIAvailable() : false;
+    const currentProvider = this.config.provider;
+    console.log(`📊 状态检查 - 仅检查当前API提供商: ${currentProvider === 'cloud' ? '云端API' : '本地API'}`);
     
-    const recommendations: string[] = [];
-    
-    if (!cloudConfigured && !localConfigured) {
-      recommendations.push('请配置至少一个API提供商');
-    } else if (!cloudConfigured) {
-      recommendations.push('建议配置云端API作为备用');
-    } else if (!localConfigured) {
-      recommendations.push('建议配置本地API以提高隐私保护');
-    }
-    
-    if (this.config.provider === 'local' && !localAvailable) {
-      recommendations.push('当前选择本地API但服务不可用，请检查本地服务状态');
-    }
-    
-    return {
-      currentProvider: this.config.provider,
-      cloudStatus: { 
+    const result = {
+      currentProvider,
+      cloudStatus: { configured: false, available: false },
+      localStatus: { configured: false, available: false },
+      timeout: this.config.timeout,
+      recommendations: [] as string[]
+    };
+
+    // 只检查当前选择的API提供商
+    if (currentProvider === 'cloud') {
+      // 检查云端API
+      const cloudConfigured = this.isCloudAPIConfigured();
+      result.cloudStatus = { 
         configured: cloudConfigured, 
-        available: cloudConfigured // 云端API配置正确即认为可用
-      },
-      localStatus: { 
+        available: cloudConfigured // 假设云端API配置正确就可用
+      };
+      
+      if (!cloudConfigured) {
+        result.recommendations.push('云端API未配置，请检查DEEPSEEK_API_KEY环境变量');
+        console.log('❌ 云端API未配置');
+      } else {
+        console.log('✅ 云端API配置检查通过');
+      }
+    } else {
+      // 检查本地API
+      const localConfigured = this.isLocalAPIConfigured();
+      const localAvailable = localConfigured ? await this.isLocalAPIAvailable() : false;
+      result.localStatus = { 
         configured: localConfigured, 
         available: localAvailable 
-      },
-      timeout: this.config.timeout,
-      recommendations
-    };
+      };
+      
+      if (!localConfigured) {
+        result.recommendations.push('本地API未配置，请检查环境变量配置');
+        console.log('❌ 本地API未配置');
+      } else if (!localAvailable) {
+        result.recommendations.push('本地API配置正确但服务不可用，请启动Ollama服务');
+        console.log('❌ 本地API服务不可用');
+      } else {
+        console.log('✅ 本地API配置和服务检查通过');
+      }
+    }
+    
+    return result;
   }
 }
 

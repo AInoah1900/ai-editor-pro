@@ -157,6 +157,23 @@ export class NewKnowledgeRetriever {
     limit: number = 5
   ): Promise<KnowledgeItem[]> {
     try {
+      // 如果查询为空，直接返回最新的知识项，避免生成空向量
+      if (!query || query.trim() === '') {
+        console.log('🔍 空查询检测，直接返回最新知识项');
+        const allItems = await this.dbModels.getAllKnowledgeItems(limit);
+        
+        // 如果有领域或类型过滤，应用过滤
+        if (domain || type) {
+          return allItems.filter(item => {
+            const domainMatch = !domain || item.domain === domain;
+            const typeMatch = !type || item.type === type;
+            return domainMatch && typeMatch;
+          });
+        }
+        
+        return allItems;
+      }
+      
       // 生成查询向量
       const queryEmbedding = await this.generateEmbedding(query);
       

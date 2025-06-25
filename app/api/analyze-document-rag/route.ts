@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getDualDeepSeekClient } from '@/lib/deepseek/deepseek-dual-client';
 import { NewKnowledgeRetriever, DomainClassifier } from '@/lib/rag/new-knowledge-retriever';
 
 // 从环境变量中获取API配置
@@ -157,9 +158,8 @@ export async function POST(request: NextRequest) {
       try {
         console.log('正在调用DeepSeek API进行RAG增强分析...');
         
-        // 使用双DeepSeek客户端，强制刷新以获取最新配置
-        const { getDualDeepSeekClient } = await import('@/lib/deepseek/deepseek-dual-client');
-        const dualClient = getDualDeepSeekClient(true); // 强制刷新配置
+                  // 使用双DeepSeek客户端
+    const dualClient = getDualDeepSeekClient(); // 使用现有实例，保持配置中心设置
         
         // 获取当前提供商
         const currentProvider = dualClient.getCurrentProvider();

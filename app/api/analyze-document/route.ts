@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getDualDeepSeekClient } from '@/lib/deepseek/deepseek-dual-client';
 
 // 从环境变量中获取API配置
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
@@ -123,8 +124,7 @@ ${content}
 请严格按照上述JSON格式返回分析结果，确保输出是有效的JSON字符串。`;
 
     // 使用双DeepSeek客户端
-    const { getDualDeepSeekClient } = await import('@/lib/deepseek/deepseek-dual-client');
-    const dualClient = getDualDeepSeekClient(true);
+    const dualClient = getDualDeepSeekClient(); // 使用现有实例，保持配置中心设置
     
     console.log('🔍 调用DeepSeek API进行文档分析...');
     const response = await dualClient.createChatCompletion({
