@@ -26,7 +26,7 @@ interface ErrorItem {
 function parseDeepSeekR1Response(response: string): { errors: any[] } {
   try {
     // 1. 首先尝试直接解析（如果没有think标签）
-    const directParse = response.replace(/```json\n?|\n?```/g, '').trim();
+    let directParse = response.replace(/```json\n?|\n?```/g, '').trim();
     if (directParse.startsWith('{') && directParse.endsWith('}')) {
       return JSON.parse(directParse);
     }
@@ -38,7 +38,11 @@ function parseDeepSeekR1Response(response: string): { errors: any[] } {
     // 3. 提取JSON部分 - 查找花括号包围的内容
     const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const jsonStr = jsonMatch[0].replace(/```json\n?|\n?```/g, '').trim();
+      let jsonStr = jsonMatch[0].replace(/```json\n?|\n?```/g, '').trim();
+      
+      // 修复常见的JSON格式错误
+      jsonStr = fixCommonJsonErrors(jsonStr);
+      
       return JSON.parse(jsonStr);
     }
 
@@ -70,6 +74,79 @@ function parseDeepSeekR1Response(response: string): { errors: any[] } {
     console.log('原始响应预览:', response.substring(0, 500) + '...');
     throw error;
   }
+}
+
+/**
+ * 修复常见的JSON格式错误
+ */
+function fixCommonJsonErrors(jsonStr: string): string {
+  console.log('🔧 开始JSON修复，原始长度:', jsonStr.length);
+  console.log('🔍 检查开头字符:', jsonStr.slice(0, 5)); // 显示前5个字符
+  console.log('🔍 检查结尾字符:', jsonStr.slice(-5)); // 显示最后5个字符
+  
+  // 核心修复：处理DeepSeek-R1模型的特定错误
+  // 错误模式：正确的JSON对象后面以"]"结尾，而不是"}"结尾
+  if (jsonStr.startsWith('{') && jsonStr.endsWith(']')) {
+    console.log('🔧 检测到DeepSeek-R1特定错误：JSON对象以"]"结尾，应该是"}"');
+    
+    // 检查倒数第二个字符，如果是数组结尾符号"]"，说明errors数组是完整的
+    // 错误格式: { "errors": [...] ]
+    // 正确格式: { "errors": [...] }
+    
+    // 找到最后一个errors数组的结尾位置
+    const lastArrayEndIndex = jsonStr.lastIndexOf(']', jsonStr.length - 2);
+    
+    if (lastArrayEndIndex > 0) {
+      // 在最后一个数组结尾后添加"}"，移除错误的"]"
+      jsonStr = jsonStr.slice(0, lastArrayEndIndex + 1) + '}';
+      console.log('🔧 修复完成：将错误的结尾"]"替换为正确的"}"');
+    } else {
+      // 如果找不到数组结尾，简单地将最后的"]"替换为"}"
+      jsonStr = jsonStr.slice(0, -1) + '}';
+      console.log('🔧 修复完成：直接将结尾"]"替换为"}"');
+    }
+  }
+  
+  // 1. 修复多余的结尾方括号 - 处理 "}]" 结尾
+  if (jsonStr.endsWith('}]')) {
+    console.log('🔧 检测到"}]"结尾，修复为"}"...');
+    jsonStr = jsonStr.slice(0, -1); // 移除最后的 ']'
+  }
+  
+  // 2. 修复多余的开头方括号
+  if (jsonStr.startsWith('[{')) {
+    console.log('🔧 检测到多余的开头方括号，正在修复...');
+    jsonStr = jsonStr.slice(1); // 移除开头的 '['
+  }
+  
+  // 3. 修复错误的数组结尾 - 检查 "errors": [...]] 这种情况
+  jsonStr = jsonStr.replace(/(\]\s*)\]\s*}/, '$1}');
+  
+  // 4. 修复缺失的花括号结尾
+  if (jsonStr.startsWith('{') && !jsonStr.endsWith('}')) {
+    // 检查是否只是缺少最后的花括号
+    const openBraces = (jsonStr.match(/\{/g) || []).length;
+    const closeBraces = (jsonStr.match(/\}/g) || []).length;
+    
+    if (openBraces > closeBraces) {
+      console.log('🔧 检测到缺失的花括号结尾，正在修复...');
+      jsonStr += '}';
+    }
+  }
+  
+  // 5. 修复错误的数组结构 - "errors": [...] 后面多了 ]
+  const errorsArrayPattern = /("errors"\s*:\s*\[[^\]]*\])\s*\]/g;
+  jsonStr = jsonStr.replace(errorsArrayPattern, '$1');
+  
+  // 6. 修复常见的结尾错误模式
+  // 处理 "...}]" 或 "...} ]" 或 "...}\n]" 等情况
+  jsonStr = jsonStr.replace(/}\s*\]$/, '}');
+  
+  console.log('🔧 JSON修复完成，修复后长度:', jsonStr.length);
+  console.log('🔍 修复后开头字符:', jsonStr.slice(0, 5)); // 显示前5个字符
+  console.log('🔍 修复后结尾字符:', jsonStr.slice(-5)); // 显示最后5个字符
+  
+  return jsonStr;
 }
 
 export async function POST(request: NextRequest) {
@@ -131,7 +208,27 @@ ${content}
       messages: [
         {
           role: 'system',
-          content: '你是专业期刊编辑。请严格按照JSON格式返回文档校对结果。输出必须是有效的JSON字符串，包含errors数组。'
+          content: `你是专业期刊编辑。请严格按照JSON格式返回文档校对结果。输出必须是有效的JSON字符串，包含errors数组.
+    
+          JSON输出格式示例：
+          {
+            "errors": [
+              {
+                "id": "error_1",
+                "type": "error",
+                "original": "具体错误文字",
+                "suggestion": "修改建议",
+                "reason": "基于知识库的修改原因",
+                "category": "错误类别"
+              }
+            ]
+          }
+
+          其中参数type错误类型说明：
+          - error: 确定错误（术语错误、重复词汇、语法错误）
+          - warning: 疑似错误（表达不规范、标点问题）
+          - suggestion: 优化建议（表达优化、风格建议）
+          `
         },
         {
           role: 'user',

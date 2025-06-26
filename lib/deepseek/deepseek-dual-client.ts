@@ -99,6 +99,7 @@ export class DualDeepSeekClient {
     const requestBody = {
       model: request.model || activeConfig.model,
       messages: request.messages,
+      response_format: {'type': 'json_object'},
       temperature: request.temperature ?? 0.3,
       max_tokens: request.max_tokens ?? 32000,
       stream: request.stream ?? false,
@@ -106,8 +107,11 @@ export class DualDeepSeekClient {
     };
 
     console.log('🌐 调用云端DeepSeek API...');
-    console.log(`📍 API地址: ${url}`);
-    console.log(`🤖 使用模型: ${requestBody.model}`);
+    console.log(`📍 云端API-API地址: ${url}`);
+    console.log(`🤖 云端API-使用模型: ${requestBody.model}`);
+    console.log(`🔍 云端API-请求体: ${JSON.stringify(requestBody)}`);
+    console.log(`📝 云端API-消息数量: ${requestBody.messages.length}`);
+
     
     const response = await this.makeRequest(url, {
       method: 'POST',
@@ -149,15 +153,17 @@ export class DualDeepSeekClient {
     const requestBody = {
       model: request.model || activeConfig.model,
       messages: request.messages,
+      response_format: {'type': 'json_object'},
       temperature: request.temperature ?? 0.3,
       max_tokens: request.max_tokens ?? 32000,
       stream: request.stream ?? false
     };
 
     console.log(`🏠 调用本地API聊天接口...`);
-    console.log(`📍 API地址: ${url}`);
-    console.log(`🤖 使用模型: ${requestBody.model}`);
-    console.log(`📝 消息数量: ${requestBody.messages.length}`);
+    console.log(`📍 本地API-API地址: ${url}`);
+    console.log(`🤖 本地API-使用模型: ${requestBody.model}`);
+    console.log(`🔍 本地API-请求体: ${JSON.stringify(requestBody)}`);
+    console.log(`📝 本地API-消息数量: ${requestBody.messages.length}`);
     console.log(`⏳ 本地API调用，不设置超时限制，等待完成...`);
     
     const response = await this.makeLocalRequest(url, {
@@ -225,7 +231,7 @@ export class DualDeepSeekClient {
   async testProviderConnection(provider: DeepSeekProvider): Promise<void> {
     const testMessage = {
       role: 'user' as const,
-      content: '测试连接'
+      content: '测试连接，请回复简单的json格式确认'
     };
 
     const testRequest: ChatCompletionRequest = {
@@ -569,13 +575,19 @@ export class DualDeepSeekClient {
         method: options.method || 'GET',
         headers: options.headers || {},
         body: options.body,
-        // 设置较长的超时时间
-        headersTimeout: 10 * 60 * 1000, // 10分钟
-        bodyTimeout: 15 * 60 * 1000,    // 15分钟
-        connect: {
-          timeout: 30000, // 30秒连接超时
-        }
+        // 设置非常长的超时时间，特别是对于deepseek-r1模型
+        headersTimeout: 30 * 60 * 1000, // 30分钟 Headers超时
+        bodyTimeout: 45 * 60 * 1000,    // 45分钟 Body超时
+        connectTimeout: 30000,          // 30秒连接超时
+        keepAliveTimeout: 60000,        // 60秒保持连接
+        maxRedirections: 0              // 禁用重定向
       };
+      
+      console.log('📡 undici配置:', {
+        headersTimeout: '30分钟',
+        bodyTimeout: '45分钟',
+        connectTimeout: '30秒'
+      });
       
       const response = undiciRequest ? await undiciRequest(url, undiciOptions) : null;
       
@@ -615,14 +627,17 @@ export class DualDeepSeekClient {
    * 使用标准fetch发起请求（带增强超时处理）
    */
   private async makeStandardFetchRequest(url: string, options: RequestInit): Promise<Response> {
-    // 创建一个AbortController，但不设置自动超时
+    // 创建一个AbortController，但设置很长的超时时间
     const controller = new AbortController();
     
-    // 为Node.js fetch设置更长的超时时间（10分钟）
+    // 为Node.js fetch设置非常长的超时时间（30分钟）
+    const timeoutDuration = 30 * 60 * 1000; // 30分钟
     const timeoutId = setTimeout(() => {
-      console.log('⏰ 本地API请求超过10分钟，主动取消...');
+      console.log('⏰ 本地API请求超过30分钟，主动取消...');
       controller.abort();
-    }, 10 * 60 * 1000); // 10分钟超时
+    }, timeoutDuration);
+    
+    console.log('📡 标准fetch配置: 30分钟超时');
     
     try {
       const requestOptions: RequestInit = {
