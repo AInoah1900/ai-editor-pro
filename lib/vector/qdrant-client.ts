@@ -195,7 +195,7 @@ export class QdrantVectorClient {
       console.log(`搜索完成，找到 ${searchResponse.length} 个结果`);
 
       return searchResponse.map((result) => ({
-        id: (result.payload?.original_id as string) || String(result.id), // 返回原始 ID
+        id: (result.payload?.original_id as string) || (result.payload?.vector_id as string) || String(result.id), // 兼容多种ID格式
         score: result.score,
         payload: result.payload || {},
       }));
@@ -233,7 +233,7 @@ export class QdrantVectorClient {
             console.log(`备用搜索完成，找到 ${fallbackResponse.length} 个结果`);
             
             return fallbackResponse.map((result) => ({
-              id: (result.payload?.original_id as string) || String(result.id),
+              id: (result.payload?.original_id as string) || (result.payload?.vector_id as string) || String(result.id),
               score: result.score,
               payload: result.payload || {},
             }));

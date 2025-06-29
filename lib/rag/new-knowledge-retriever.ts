@@ -154,7 +154,9 @@ export class NewKnowledgeRetriever {
     query: string,
     domain?: string,
     type?: string,
-    limit: number = 5
+    limit: number = 5,
+    ownershipType?: 'private' | 'shared',
+    ownerId?: string
   ): Promise<KnowledgeItem[]> {
     try {
       // 如果查询为空，直接返回最新的知识项，避免生成空向量
@@ -180,14 +182,31 @@ export class NewKnowledgeRetriever {
       // 构建Qdrant过滤条件（使用正确的格式）
       let filter: Record<string, unknown> | undefined = undefined;
       
-      if (domain || type) {
+      if (domain || type || ownershipType) {
         const conditions: Record<string, unknown>[] = [];
         
         if (domain) {
-          conditions.push({
-            key: 'domain',
-            match: { value: domain }
-          });
+          // 智能域匹配：如果查询academic域，也匹配general域的内容
+          // 因为general域可能包含学术相关的通用知识
+          if (domain === 'academic') {
+            conditions.push({
+              should: [
+                {
+                  key: 'domain',
+                  match: { value: 'academic' }
+                },
+                {
+                  key: 'domain',
+                  match: { value: 'general' }
+                }
+              ]
+            });
+          } else {
+            conditions.push({
+              key: 'domain',
+              match: { value: domain }
+            });
+          }
         }
         
         if (type) {
@@ -197,10 +216,30 @@ export class NewKnowledgeRetriever {
           });
         }
         
+        if (ownershipType) {
+          conditions.push({
+            key: 'ownership_type',
+            match: { value: ownershipType }
+          });
+          
+          // 如果是专属知识库，还要匹配所有者ID
+          if (ownershipType === 'private' && ownerId) {
+            conditions.push({
+              key: 'owner_id',
+              match: { value: ownerId }
+            });
+          }
+        }
+        
         // Qdrant过滤器格式修复
-        filter = {
-          must: conditions
-        };
+        if (conditions.length === 1 && conditions[0].should) {
+          // 如果只有一个should条件，直接使用should
+          filter = conditions[0];
+        } else {
+          filter = {
+            must: conditions
+          };
+        }
       }
 
       // 在 Qdrant 中搜索相似向量
@@ -838,9 +877,9 @@ export class NewKnowledgeRetriever {
         sharedDocuments
       ] = await Promise.all([
         // 检索专属知识库中的知识项
-        this.retrieveRelevantKnowledge(query, domain, type, privateLimit),
+        this.retrieveRelevantKnowledge(query, domain, type, privateLimit, 'private', ownerId),
         // 检索共享知识库中的知识项
-        this.retrieveRelevantKnowledge(query, domain, type, sharedLimit),
+        this.retrieveRelevantKnowledge(query, domain, type, sharedLimit, 'shared'),
         // 检索专属文档
         this.retrievePrivateDocuments(query, ownerId, domain, 3),
         // 检索共享文档
