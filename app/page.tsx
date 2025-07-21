@@ -8,6 +8,33 @@ import MobileMenu from "./components/MobileMenu";
 import PricingCard from "./components/PricingCard";
 
 export default function Home() {
+  const [isLoggedIn, setIsLoggedIn] = React.useState(false);
+  const [user, setUser] = React.useState(null);
+
+  // 检查登录状态
+  React.useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    const userInfo = localStorage.getItem('user_info');
+    
+    if (token && userInfo) {
+      try {
+        const userData = JSON.parse(userInfo);
+        setUser(userData);
+        setIsLoggedIn(true);
+      } catch (error) {
+        console.error('解析用户信息失败:', error);
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user_info');
+    setUser(null);
+    setIsLoggedIn(false);
+  };
+
   const features = [
     {
       icon: (
@@ -154,10 +181,36 @@ export default function Home() {
               <Link href="#contact" className="text-gray-600 hover:text-gray-900 transition-colors">联系我们</Link>
             </div>
             <div className="hidden md:flex items-center space-x-4">
-              <button className="text-gray-600 hover:text-gray-900 transition-colors">登录</button>
-              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors btn-primary">
-                免费试用
-              </button>
+              {isLoggedIn && user ? (
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-sm font-medium">
+                        {user.nickname?.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <span className="text-gray-700">{user.nickname}</span>
+                  </div>
+                  <Link href="/profile" className="text-blue-600 hover:text-blue-700 transition-colors font-medium">
+                    个人中心
+                  </Link>
+                  <button 
+                    onClick={handleLogout}
+                    className="text-gray-600 hover:text-gray-900 transition-colors"
+                  >
+                    退出
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-4">
+                  <Link href="/profile" className="text-gray-600 hover:text-gray-900 transition-colors">
+                    登录
+                  </Link>
+                  <Link href="/editor" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors btn-primary">
+                    免费试用
+                  </Link>
+                </div>
+              )}
             </div>
             <MobileMenu />
           </div>

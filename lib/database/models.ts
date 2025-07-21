@@ -1,5 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import { QdrantClient } from '@qdrant/js-client-rest';
+import { hash, compare } from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 // 从环境变量读取PostgreSQL配置
 const getPostgreSQLConfig = () => {
@@ -90,6 +92,69 @@ export interface KnowledgeItem {
 }
 
 /**
+ * 用户接口
+ */
+export interface User {
+  id: string;
+  username: string;
+  nickname: string;
+  email: string;
+  phone?: string;
+  avatar_url?: string;
+  password_hash: string;
+  role_id: string;
+  publisher_name?: string;
+  publisher_website?: string;
+  publisher_submission_template?: string; // 文件路径
+  journal_domain?: string;
+  is_active: boolean;
+  email_verified: boolean;
+  phone_verified: boolean;
+  last_login_at?: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 用户角色接口
+ */
+export interface Role {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string;
+  permissions: string[];
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 会话接口
+ */
+export interface Session {
+  id: string;
+  user_id: string;
+  access_token: string;
+  refresh_token: string;
+  expires_at: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 用户配置文件接口
+ */
+export interface UserProfile {
+  id: string;
+  user_id: string;
+  bio?: string;
+  preferences: Record<string, any>;
+  notification_settings: Record<string, boolean>;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
  * 数据库模型类
  */
 export class DatabaseModels {
@@ -145,6 +210,82 @@ export class DatabaseModels {
         )
       `);
 
+      // 创建用户角色表
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS roles (
+          id VARCHAR(255) PRIMARY KEY,
+          name VARCHAR(100) UNIQUE NOT NULL,
+          display_name VARCHAR(200) NOT NULL,
+          description TEXT,
+          permissions TEXT[] DEFAULT '{}',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // 创建用户表
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id VARCHAR(255) PRIMARY KEY,
+          username VARCHAR(100) UNIQUE NOT NULL,
+          nickname VARCHAR(200) NOT NULL,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          phone VARCHAR(20),
+          avatar_url TEXT,
+          password_hash VARCHAR(255) NOT NULL,
+          role_id VARCHAR(255) REFERENCES roles(id),
+          publisher_name VARCHAR(500),
+          publisher_website TEXT,
+          publisher_submission_template TEXT,
+          journal_domain VARCHAR(100),
+          is_active BOOLEAN DEFAULT true,
+          email_verified BOOLEAN DEFAULT false,
+          phone_verified BOOLEAN DEFAULT false,
+          last_login_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // 创建会话表
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id VARCHAR(255) PRIMARY KEY,
+          user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT NOT NULL,
+          expires_at TIMESTAMP NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // 创建用户配置表
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS user_profiles (
+          id VARCHAR(255) PRIMARY KEY,
+          user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+          bio TEXT,
+          preferences JSONB DEFAULT '{}',
+          notification_settings JSONB DEFAULT '{}',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // 更新现有表，添加用户关联
+      await client.query(`
+        ALTER TABLE file_metadata 
+        ADD COLUMN IF NOT EXISTS created_by VARCHAR(255) REFERENCES users(id),
+        ADD COLUMN IF NOT EXISTS updated_by VARCHAR(255) REFERENCES users(id)
+      `);
+
+      await client.query(`
+        ALTER TABLE knowledge_items 
+        ADD COLUMN IF NOT EXISTS created_by VARCHAR(255) REFERENCES users(id),
+        ADD COLUMN IF NOT EXISTS updated_by VARCHAR(255) REFERENCES users(id)
+      `);
+
       // 创建索引
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_file_metadata_domain ON file_metadata(domain);
@@ -152,14 +293,76 @@ export class DatabaseModels {
         CREATE INDEX IF NOT EXISTS idx_knowledge_items_domain ON knowledge_items(domain);
         CREATE INDEX IF NOT EXISTS idx_knowledge_items_type ON knowledge_items(type);
         CREATE INDEX IF NOT EXISTS idx_knowledge_items_vector_id ON knowledge_items(vector_id);
+        CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+        CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+        CREATE INDEX IF NOT EXISTS idx_users_role_id ON users(role_id);
+        CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_sessions_access_token ON sessions(access_token);
+        CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
       `);
 
-      console.log('数据库表初始化完成');
+      // 初始化默认角色
+      await this.initializeDefaultRoles();
+
+      console.log('数据库表初始化完成（包含用户认证系统）');
     } catch (error) {
       console.error('数据库表初始化失败:', error);
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  /**
+   * 初始化默认角色
+   */
+  async initializeDefaultRoles(): Promise<void> {
+    const defaultRoles = [
+      {
+        id: 'role_author',
+        name: 'author',
+        display_name: '作者',
+        description: '文章作者，可以上传和编辑自己的文档',
+        permissions: ['document:create', 'document:read_own', 'document:update_own', 'document:delete_own']
+      },
+      {
+        id: 'role_editor',
+        name: 'editor',
+        display_name: '编辑',
+        description: '期刊编辑，可以编辑和审核文档',
+        permissions: [
+          'document:create', 'document:read', 'document:update', 'document:delete',
+          'knowledge:read', 'knowledge:create', 'review:create', 'review:update'
+        ]
+      },
+      {
+        id: 'role_chief_editor',
+        name: 'chief_editor',
+        display_name: '主编',
+        description: '主编，拥有期刊管理权限',
+        permissions: [
+          'document:*', 'knowledge:*', 'review:*', 'user:read', 'user:update',
+          'analytics:read', 'settings:update'
+        ]
+      },
+      {
+        id: 'role_reviewer',
+        name: 'reviewer',
+        display_name: '审稿专家',
+        description: '审稿专家，可以审阅和评论文档',
+        permissions: ['document:read', 'review:create', 'review:update', 'comment:create']
+      },
+      {
+        id: 'role_admin',
+        name: 'admin',
+        display_name: '系统管理员',
+        description: '系统管理员，拥有所有权限',
+        permissions: ['*']
+      }
+    ];
+
+    for (const role of defaultRoles) {
+      await this.createRole(role);
     }
   }
 
@@ -749,6 +952,408 @@ export class DatabaseModels {
         private_by_domain: {},
         shared_by_domain: {},
       };
+    } finally {
+      client.release();
+    }
+  }
+
+  // =========================== 用户管理方法 ===========================
+
+  /**
+   * 创建用户
+   */
+  async createUser(userData: Omit<User, 'id' | 'created_at' | 'updated_at' | 'password_hash'> & { password: string }): Promise<User> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const passwordHash = await hash(userData.password, 12);
+      const now = new Date();
+
+      const result = await client.query(`
+        INSERT INTO users (
+          id, username, nickname, email, phone, avatar_url, password_hash,
+          role_id, publisher_name, publisher_website, publisher_submission_template,
+          journal_domain, is_active, email_verified, phone_verified, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        RETURNING *
+      `, [
+        userId, userData.username, userData.nickname, userData.email, userData.phone || null,
+        userData.avatar_url || null, passwordHash, userData.role_id, userData.publisher_name || null,
+        userData.publisher_website || null, userData.publisher_submission_template || null,
+        userData.journal_domain || null, userData.is_active, userData.email_verified,
+        userData.phone_verified, now, now
+      ]);
+
+      // 创建用户配置
+      await this.createUserProfile(userId);
+
+      console.log(`用户 ${userId} 创建成功`);
+      return result.rows[0] as User;
+    } catch (error) {
+      console.error('创建用户失败:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 通过邮箱获取用户
+   */
+  async getUserByEmail(email: string): Promise<User | null> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM users WHERE email = $1 AND is_active = true
+      `, [email]);
+
+      return result.rows.length > 0 ? result.rows[0] as User : null;
+    } catch (error) {
+      console.error('获取用户失败:', error);
+      return null;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 通过用户名获取用户
+   */
+  async getUserByUsername(username: string): Promise<User | null> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM users WHERE username = $1 AND is_active = true
+      `, [username]);
+
+      return result.rows.length > 0 ? result.rows[0] as User : null;
+    } catch (error) {
+      console.error('获取用户失败:', error);
+      return null;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 通过ID获取用户
+   */
+  async getUserById(id: string): Promise<User | null> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT u.*, r.name as role_name, r.display_name as role_display_name, r.permissions
+        FROM users u
+        LEFT JOIN roles r ON u.role_id = r.id
+        WHERE u.id = $1 AND u.is_active = true
+      `, [id]);
+
+      return result.rows.length > 0 ? result.rows[0] as User : null;
+    } catch (error) {
+      console.error('获取用户失败:', error);
+      return null;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 验证用户密码
+   */
+  async validateUserPassword(email: string, password: string): Promise<User | null> {
+    const user = await this.getUserByEmail(email);
+    if (!user) return null;
+
+    const isValid = await compare(password, user.password_hash);
+    if (!isValid) return null;
+
+    // 更新最后登录时间
+    await this.updateLastLoginTime(user.id);
+
+    return user;
+  }
+
+  /**
+   * 更新最后登录时间
+   */
+  async updateLastLoginTime(userId: string): Promise<void> {
+    const client = await this.pool.getClient();
+    
+    try {
+      await client.query(`
+        UPDATE users SET last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+      `, [userId]);
+    } catch (error) {
+      console.error('更新登录时间失败:', error);
+    } finally {
+      client.release();
+    }
+  }
+
+  // =========================== 角色管理方法 ===========================
+
+  /**
+   * 创建角色
+   */
+  async createRole(roleData: Omit<Role, 'created_at' | 'updated_at'>): Promise<void> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const now = new Date();
+      
+      await client.query(`
+        INSERT INTO roles (id, name, display_name, description, permissions, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (id) DO UPDATE SET
+          display_name = EXCLUDED.display_name,
+          description = EXCLUDED.description,
+          permissions = EXCLUDED.permissions,
+          updated_at = CURRENT_TIMESTAMP
+      `, [
+        roleData.id, roleData.name, roleData.display_name,
+        roleData.description, roleData.permissions, now, now
+      ]);
+
+      console.log(`角色 ${roleData.name} 创建/更新成功`);
+    } catch (error) {
+      console.error('创建角色失败:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 获取所有角色
+   */
+  async getAllRoles(): Promise<Role[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM roles ORDER BY name
+      `);
+
+      return result.rows as Role[];
+    } catch (error) {
+      console.error('获取角色失败:', error);
+      return [];
+    } finally {
+      client.release();
+    }
+  }
+
+  // =========================== 会话管理方法 ===========================
+
+  /**
+   * 创建会话
+   */
+  async createSession(userId: string): Promise<Session> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const accessToken = jwt.sign(
+        { userId, sessionId, type: 'access' },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: '24h' }
+      );
+      const refreshToken = jwt.sign(
+        { userId, sessionId, type: 'refresh' },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: '30d' }
+      );
+
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24小时后过期
+      const now = new Date();
+
+      const result = await client.query(`
+        INSERT INTO sessions (id, user_id, access_token, refresh_token, expires_at, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+      `, [sessionId, userId, accessToken, refreshToken, expiresAt, now, now]);
+
+      return result.rows[0] as Session;
+    } catch (error) {
+      console.error('创建会话失败:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 验证会话
+   */
+  async validateSession(accessToken: string): Promise<{ user: User; session: Session } | null> {
+    try {
+      const decoded = jwt.verify(accessToken, process.env.JWT_SECRET || 'your-secret-key') as any;
+      
+      const client = await this.pool.getClient();
+      try {
+        const result = await client.query(`
+          SELECT s.*, u.* FROM sessions s
+          JOIN users u ON s.user_id = u.id
+          WHERE s.access_token = $1 AND s.expires_at > CURRENT_TIMESTAMP AND u.is_active = true
+        `, [accessToken]);
+
+        if (result.rows.length === 0) return null;
+
+        const row = result.rows[0];
+        const session: Session = {
+          id: row.id,
+          user_id: row.user_id,
+          access_token: row.access_token,
+          refresh_token: row.refresh_token,
+          expires_at: row.expires_at,
+          created_at: row.created_at,
+          updated_at: row.updated_at
+        };
+
+        const user: User = {
+          id: row.user_id,
+          username: row.username,
+          nickname: row.nickname,
+          email: row.email,
+          phone: row.phone,
+          avatar_url: row.avatar_url,
+          password_hash: row.password_hash,
+          role_id: row.role_id,
+          publisher_name: row.publisher_name,
+          publisher_website: row.publisher_website,
+          publisher_submission_template: row.publisher_submission_template,
+          journal_domain: row.journal_domain,
+          is_active: row.is_active,
+          email_verified: row.email_verified,
+          phone_verified: row.phone_verified,
+          last_login_at: row.last_login_at,
+          created_at: row.created_at,
+          updated_at: row.updated_at
+        };
+
+        return { user, session };
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error('验证会话失败:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 删除会话（登出）
+   */
+  async deleteSession(accessToken: string): Promise<void> {
+    const client = await this.pool.getClient();
+    
+    try {
+      await client.query(`
+        DELETE FROM sessions WHERE access_token = $1
+      `, [accessToken]);
+    } catch (error) {
+      console.error('删除会话失败:', error);
+    } finally {
+      client.release();
+    }
+  }
+
+  // =========================== 用户配置管理方法 ===========================
+
+  /**
+   * 创建用户配置
+   */
+  async createUserProfile(userId: string): Promise<void> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const profileId = `profile_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const now = new Date();
+
+      await client.query(`
+        INSERT INTO user_profiles (id, user_id, preferences, notification_settings, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [
+        profileId, userId,
+        JSON.stringify({
+          theme: 'light',
+          language: 'zh-CN',
+          timezone: 'Asia/Shanghai',
+          editor_mode: 'standard'
+        }),
+        JSON.stringify({
+          email_notifications: true,
+          document_updates: true,
+          review_reminders: true,
+          system_announcements: true
+        }),
+        now, now
+      ]);
+    } catch (error) {
+      console.error('创建用户配置失败:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 获取用户配置
+   */
+  async getUserProfile(userId: string): Promise<UserProfile | null> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT * FROM user_profiles WHERE user_id = $1
+      `, [userId]);
+
+      return result.rows.length > 0 ? result.rows[0] as UserProfile : null;
+    } catch (error) {
+      console.error('获取用户配置失败:', error);
+      return null;
+    } finally {
+      client.release();
+    }
+  }
+
+  // =========================== 权限验证方法 ===========================
+
+  /**
+   * 检查用户权限
+   */
+  async hasPermission(userId: string, permission: string): Promise<boolean> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT r.permissions FROM users u
+        JOIN roles r ON u.role_id = r.id
+        WHERE u.id = $1 AND u.is_active = true
+      `, [userId]);
+
+      if (result.rows.length === 0) return false;
+
+      const permissions = result.rows[0].permissions as string[];
+      
+      // 管理员拥有所有权限
+      if (permissions.includes('*')) return true;
+
+      // 检查具体权限
+      return permissions.includes(permission) || 
+             permissions.some(p => {
+               const [resource, action] = p.split(':');
+               const [reqResource, reqAction] = permission.split(':');
+               return resource === reqResource && (action === '*' || action === reqAction);
+             });
+    } catch (error) {
+      console.error('权限检查失败:', error);
+      return false;
     } finally {
       client.release();
     }

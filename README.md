@@ -714,6 +714,127 @@ if (!hasCompleteContent || hasFullDocumentError) {
 ✅ 长文档 - 完整性保护启用
 ```
 
+## 🔐 用户认证与权限管理系统
+
+### 👥 用户角色体系
+
+AI Editor Pro 提供完整的用户认证和权限管理系统，支持期刊出版社的多层级用户管理需求：
+
+| 角色 | 中文名称 | 权限描述 | 适用场景 |
+|------|----------|----------|----------|
+| **Author** | 作者 | 创建、查看、编辑、删除自己的文档 | 学术作者投稿 |
+| **Editor** | 编辑 | 编辑和审核所有文档、管理知识库 | 期刊编辑人员 |
+| **Chief Editor** | 主编 | 期刊管理、用户管理、系统设置 | 期刊主编 |
+| **Reviewer** | 审稿专家 | 审阅文档、添加评论 | 外部审稿专家 |
+| **Admin** | 系统管理员 | 所有权限 | 技术管理员 |
+
+### 🎯 权限控制机制
+
+采用基于资源和操作的细粒度权限控制：
+
+```
+权限格式：{resource}:{action}
+
+资源类型：
+- document: 文档管理
+- knowledge: 知识库管理  
+- review: 审核管理
+- user: 用户管理
+- analytics: 分析报告
+- settings: 系统设置
+
+操作类型：
+- create: 创建
+- read: 读取 / read_own: 只读自己的
+- update: 更新 / update_own: 只更新自己的
+- delete: 删除 / delete_own: 只删除自己的
+- *: 所有操作
+
+权限示例：
+- document:read_own - 只能查看自己的文档
+- knowledge:* - 知识库所有权限
+- * - 超级管理员权限
+```
+
+### 🚪 多入口登录设计
+
+**双登录入口设计**，满足不同用户习惯：
+
+1. **首页登录入口**：`http://localhost:3000` 
+   - 位置：右上角登录按钮
+   - 登录后显示用户头像和昵称
+   - 支持快速跳转到个人中心
+
+2. **编辑器内置登录**：`http://localhost:3000/editor`
+   - 位置：个人中心菜单
+   - 支持登录/注册选项卡切换
+   - 登录后显示用户信息和快速操作
+
+3. **独立个人中心页面**：`http://localhost:3000/profile`
+   - 完整的用户信息管理
+   - 账户设置和偏好配置
+   - 权限信息查看
+
+### 📝 用户注册信息
+
+注册表单包含完整的期刊出版社用户信息：
+
+**基础信息**：
+- 用户昵称、用户名、邮箱地址（必填）
+- 手机号码、用户头像（可选）
+- 用户角色选择（下拉菜单）
+- 期刊领域标注
+
+**出版社信息**（编辑和主编角色）：
+- 出版社名称、官方网站
+- 投稿要求模板（支持文件上传）
+
+### 🔌 认证API接口
+
+```bash
+# 用户注册
+POST /api/auth/register
+Content-Type: application/json
+{
+  "username": "editor001",
+  "nickname": "编辑小王", 
+  "email": "editor@journal.com",
+  "password": "SecurePass123!",
+  "role_id": "role_editor",
+  "publisher_name": "学术期刊出版社",
+  "journal_domain": "医学"
+}
+
+# 用户登录
+POST /api/auth/login
+Content-Type: application/json
+{
+  "email": "editor@journal.com",
+  "password": "SecurePass123!",
+  "remember_me": true
+}
+
+# 获取用户信息
+GET /api/auth/me
+Authorization: Bearer {access_token}
+
+# 用户登出
+POST /api/auth/logout
+Authorization: Bearer {access_token}
+
+# 获取可用角色
+GET /api/auth/roles
+```
+
+### 🔒 安全特性
+
+- **JWT身份认证**：24小时access token + 30天refresh token
+- **密码加密**：使用bcrypt进行12轮salt哈希
+- **权限验证中间件**：细粒度权限控制
+- **速率限制**：防止暴力破解攻击
+- **会话管理**：支持多设备登录和会话过期
+- **环境变量配置**：敏感信息安全存储
+
 ## 🚀 主要功能
 
 ### 📝 文档编辑器 (`/editor`)
@@ -759,13 +880,36 @@ npm install
 3. **环境配置**
 ```bash
 cp .env.example .env.local
-# 配置数据库连接和API密钥
+# 配置数据库连接、API密钥和JWT密钥
+```
+
+**必需的环境变量**：
+```bash
+# 数据库配置
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=ai_editor_pro
+POSTGRES_USER=your_username
+POSTGRES_PASSWORD=your_password
+
+# JWT认证配置（必须设置）
+JWT_SECRET=your-jwt-secret-key-here
+
+# DeepSeek API配置
+DEEPSEEK_API_KEY=your-deepseek-api-key
+
+# Qdrant配置
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION_NAME=ai_editor_knowledge
 ```
 
 4. **数据库初始化**
 ```bash
-# PostgreSQL
+# PostgreSQL 基础表（如果尚未创建）
 psql -U postgres -d ai_editor_pro -f scripts/init-db.sql
+
+# 用户认证系统表（必须运行）
+node scripts/init-user-auth-db.js
 
 # Qdrant (Docker)
 docker run -p 6333:6333 qdrant/qdrant
@@ -788,17 +932,65 @@ docker-compose ps
 
 ## 📋 使用指南
 
+### 用户注册与登录
+
+#### 1. 新用户注册
+
+访问任一登录入口进行注册：
+- 首页右上角点击"登录" → 选择"注册"选项卡
+- 编辑器页面 → 个人中心菜单 → 登录/注册
+- 直接访问：`http://localhost:3000/profile`
+
+**注册步骤**：
+1. 填写基础信息（用户名、昵称、邮箱、密码）
+2. 选择用户角色（作者/编辑/主编/审稿专家）
+3. 填写期刊领域信息
+4. 编辑和主编角色需填写出版社信息
+5. 完成注册后跳转到登录页面
+
+#### 2. 用户登录
+
+**支持多种登录方式**：
+- 邮箱 + 密码登录
+- 记住我功能（30天免登录）
+- JWT令牌自动续期
+
+#### 3. 个人中心功能
+
+登录后可访问个人中心：
+- 查看和编辑个人资料
+- 管理出版社信息
+- 查看角色权限
+- 配置账户偏好设置
+- 查看登录历史和统计信息
+
 ### 基本操作流程
 
-1. **上传文档** - 支持拖拽或点击上传
-2. **选择模式** - 基础AI分析 或 RAG增强分析
-3. **查看结果** - 完整文档 + 彩色错误标注
-4. **交互操作**:
+1. **用户登录** - 选择合适的角色登录系统
+2. **上传文档** - 支持拖拽或点击上传
+3. **选择模式** - 基础AI分析 或 RAG增强分析
+4. **查看结果** - 完整文档 + 彩色错误标注
+5. **交互操作**:
    - 点击红色标注 → 处理确定错误
    - 点击黄色标注 → 处理疑似错误
    - 点击绿色标注 → 查看优化建议
    - 蓝色标注 → 已替换内容
-5. **保存导出** - 保存修改或导出结果
+6. **保存导出** - 保存修改或导出结果
+
+### 角色权限说明
+
+**不同角色的功能访问权限**：
+
+| 功能模块 | 作者 | 编辑 | 主编 | 审稿专家 | 管理员 |
+|----------|------|------|------|----------|--------|
+| 上传自己的文档 | ✅ | ✅ | ✅ | ❌ | ✅ |
+| 编辑自己的文档 | ✅ | ✅ | ✅ | ❌ | ✅ |
+| 查看所有文档 | ❌ | ✅ | ✅ | ✅ | ✅ |
+| 编辑所有文档 | ❌ | ✅ | ✅ | ❌ | ✅ |
+| 知识库管理 | ❌ | ✅ | ✅ | ❌ | ✅ |
+| 用户管理 | ❌ | ❌ | ✅ | ❌ | ✅ |
+| 系统设置 | ❌ | ❌ | ✅ | ❌ | ✅ |
+| 审稿评论 | ❌ | ✅ | ✅ | ✅ | ✅ |
 
 ### 高级功能
 
@@ -824,6 +1016,80 @@ docker-compose ps
 - **语义检索**: Qdrant向量数据库
 - **知识融合**: RAG (Retrieval-Augmented Generation)
 - **错误检测**: 多层级验证机制
+
+### 用户认证架构
+
+#### 数据库设计
+```
+用户认证数据库表结构：
+
+roles (角色表)
+├── id: 角色ID
+├── name: 角色名称
+├── display_name: 显示名称
+├── description: 角色描述
+└── permissions: 权限数组
+
+users (用户表)
+├── id: 用户ID
+├── username: 用户名
+├── nickname: 昵称
+├── email: 邮箱地址
+├── phone: 手机号
+├── password_hash: 密码哈希
+├── role_id: 角色ID（外键）
+├── publisher_name: 出版社名称
+├── publisher_website: 出版社网站
+├── publisher_submission_template: 投稿模板
+└── journal_domain: 期刊领域
+
+sessions (会话表)
+├── id: 会话ID
+├── user_id: 用户ID（外键）
+├── access_token: 访问令牌
+├── refresh_token: 刷新令牌
+└── expires_at: 过期时间
+
+user_profiles (用户配置表)
+├── id: 配置ID
+├── user_id: 用户ID（外键）
+├── bio: 个人简介
+├── preferences: 偏好设置(JSONB)
+└── notification_settings: 通知设置(JSONB)
+```
+
+#### 认证流程
+```
+用户注册/登录流程：
+
+注册流程:
+1. 前端表单验证
+2. 后端数据验证
+3. 密码bcrypt加密
+4. 创建用户记录
+5. 初始化用户配置
+
+登录流程:
+1. 邮箱/密码验证
+2. 生成JWT令牌
+3. 创建会话记录
+4. 返回令牌和用户信息
+5. 前端存储令牌
+
+权限验证:
+1. 提取JWT令牌
+2. 验证令牌有效性
+3. 查询用户角色权限
+4. 检查资源访问权限
+5. 允许/拒绝操作
+```
+
+#### 中间件系统
+- **withAuth()**: 需要登录认证
+- **withRole(['editor'])**: 需要特定角色
+- **withOptionalAuth()**: 可选认证
+- **withResourceOwnership()**: 资源所有者验证
+- **withRateLimit()**: API速率限制
 
 ### 性能优化
 - **缓存策略**: Redis缓存频繁查询
@@ -873,6 +1139,13 @@ node scripts/check-qdrant-status.js
 - 文档问题: docs@ai-editor-pro.com
 
 ### 更新日志
+- **v2.0.0** (2025-01-25): 🎉 **用户认证与权限管理系统正式上线**
+  - 新增完整的用户注册、登录、权限管理功能
+  - 支持5种用户角色：作者、编辑、主编、审稿专家、管理员
+  - 实现双入口登录设计：首页入口 + 编辑器内置入口
+  - 集成JWT认证和bcrypt密码加密
+  - 添加个人中心页面和用户配置管理
+  - 向量维度4096维完全升级适配本地API
 - **v1.2.0** (2025-01-23): 文档显示问题彻底修复
 - **v1.1.0** (2024-01-15): RAG知识库增强
 - **v1.0.0** (2024-01-01): 初始版本发布
@@ -883,7 +1156,52 @@ node scripts/check-qdrant-status.js
 
 ---
 
+## 🧪 功能测试
+
+### 验证用户认证系统
+
+运行以下命令测试用户认证系统是否正常工作：
+
+```bash
+# 测试用户认证系统功能
+node scripts/test-user-auth-system.js
+```
+
+测试包括：
+- ✅ 服务器连接检查
+- ✅ 获取角色列表
+- ✅ 用户注册功能
+- ✅ 用户登录功能
+- ✅ 用户信息获取
+- ✅ 权限验证机制
+- ✅ 用户登出功能
+
+### 快速体验用户功能
+
+1. **启动开发服务器**：
+   ```bash
+   npm run dev
+   ```
+
+2. **初始化用户认证数据库**（首次使用）：
+   ```bash
+   node scripts/init-user-auth-db.js
+   ```
+
+3. **访问系统**：
+   - 首页登录：http://localhost:3000
+   - 编辑器：http://localhost:3000/editor
+   - 个人中心：http://localhost:3000/profile
+
+4. **测试不同角色**：
+   - 注册不同角色的用户账户
+   - 体验不同的权限和功能
+
+---
+
 **AI Editor Pro** - 让文档编辑更智能，让质量控制更精准！ 🚀
+
+**v2.0 重大更新** - 现在支持完整的用户认证和权限管理系统！ 🎉
 
 ## 🔧 本地API Token设置指南
 
