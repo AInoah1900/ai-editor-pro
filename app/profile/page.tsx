@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import LoginForm from '../components/auth/LoginForm';
 import RegisterForm from '../components/auth/RegisterForm';
 
@@ -35,6 +35,40 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'login' | 'register' | 'profile'>('login');
   const [error, setError] = useState('');
+
+  // 从URL哈希获取初始Tab状态
+  const getTabFromHash = (): 'login' | 'register' | 'profile' => {
+    if (typeof window === 'undefined') return 'login';
+    const hash = window.location.hash.replace('#', '');
+    if (hash === 'register') return 'register';
+    if (hash === 'login') return 'login';
+    return 'login';
+  };
+
+  // 监听URL哈希变化
+  useEffect(() => {
+    const handleHashChange = () => {
+      const newTab = getTabFromHash();
+      setActiveTab(newTab);
+    };
+
+    // 设置初始Tab状态
+    setActiveTab(getTabFromHash());
+
+    // 监听哈希变化
+    window.addEventListener('hashchange', handleHashChange);
+    
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, []);
+
+  // Tab切换处理函数
+  const handleTabChange = (tab: 'login' | 'register') => {
+    setActiveTab(tab);
+    // 更新URL哈希，但不刷新页面
+    window.location.hash = tab;
+  };
 
   // 检查登录状态
   useEffect(() => {
@@ -166,8 +200,8 @@ export default function ProfilePage() {
             <div className="border-b border-gray-200">
               <nav className="-mb-px flex">
                 <button
-                  onClick={() => setActiveTab('login')}
-                  className={`py-2 px-4 border-b-2 font-medium text-sm ${
+                  onClick={() => handleTabChange('login')}
+                  className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
                     activeTab === 'login'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -176,8 +210,8 @@ export default function ProfilePage() {
                   登录
                 </button>
                 <button
-                  onClick={() => setActiveTab('register')}
-                  className={`py-2 px-4 border-b-2 font-medium text-sm ${
+                  onClick={() => handleTabChange('register')}
+                  className={`py-2 px-4 border-b-2 font-medium text-sm transition-colors ${
                     activeTab === 'register'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -197,7 +231,7 @@ export default function ProfilePage() {
               )}
               {activeTab === 'register' && (
                 <RegisterForm 
-                  onSuccess={() => setActiveTab('login')}
+                  onSuccess={() => handleTabChange('login')}
                   className="max-w-2xl mx-auto"
                 />
               )}
