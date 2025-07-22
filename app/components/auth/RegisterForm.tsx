@@ -10,6 +10,12 @@ interface Role {
   description: string;
 }
 
+interface JournalDomainOption {
+  code: string;
+  name: string;
+  category_name: string;
+}
+
 interface RegisterFormProps {
   onSuccess?: (user: any) => void;
   redirectTo?: string;
@@ -32,6 +38,7 @@ export default function RegisterForm({ onSuccess, redirectTo, className = '' }: 
     journal_domain: ''
   });
   const [roles, setRoles] = useState<Role[]>([]);
+  const [domains, setDomains] = useState<JournalDomainOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
@@ -51,7 +58,29 @@ export default function RegisterForm({ onSuccess, redirectTo, className = '' }: 
       }
     };
 
+    const fetchDomains = async () => {
+      try {
+        const response = await fetch('/api/journal-domains?format=simple');
+        const result = await response.json();
+        if (result.success) {
+          setDomains(result.data.domains);
+        }
+      } catch (error) {
+        console.error('获取期刊领域失败:', error);
+        // 使用备用选项
+        setDomains([
+          { code: 'general', name: '通用', category_name: '通用' },
+          { code: 'computer_science', name: '计算机科学与技术', category_name: '应用与技术领域' },
+          { code: 'medicine', name: '医学', category_name: '自然科学与工程技术' },
+          { code: 'engineering', name: '工程与技术', category_name: '自然科学与工程技术' },
+          { code: 'economics', name: '经济学', category_name: '社会科学与人文科学' },
+          { code: 'literature', name: '文学', category_name: '社会科学与人文科学' }
+        ]);
+      }
+    };
+
     fetchRoles();
+    fetchDomains();
   }, []);
 
   // 监听角色变化，决定是否显示出版社字段
@@ -288,18 +317,26 @@ export default function RegisterForm({ onSuccess, redirectTo, className = '' }: 
 
             <div>
               <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="journal_domain">
-                期刊领域
+                期刊领域 ({domains.length}个可选)
               </label>
-              <input
+              <select
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 id="journal_domain"
                 name="journal_domain"
-                type="text"
-                placeholder="如：医学、工程、文学等"
                 value={formData.journal_domain}
                 onChange={handleChange}
                 disabled={loading}
-              />
+              >
+                <option value="">请选择期刊领域</option>
+                {domains.map(domain => (
+                  <option key={domain.code} value={domain.code}>
+                    {domain.name} ({domain.category_name})
+                  </option>
+                ))}
+              </select>
+              {domains.length === 0 && (
+                <p className="text-sm text-gray-500 mt-1">正在加载期刊领域选项...</p>
+              )}
             </div>
           </div>
 

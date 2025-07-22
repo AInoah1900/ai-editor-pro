@@ -1358,4 +1358,132 @@ export class DatabaseModels {
       client.release();
     }
   }
+
+  /**
+   * 获取所有期刊领域
+   */
+  async getAllJournalDomains(): Promise<any[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT id, code, name, category, category_name, description, 
+               sort_order, is_active, created_at, updated_at
+        FROM journal_domains 
+        WHERE is_active = true
+        ORDER BY sort_order, name
+      `);
+
+      return result.rows;
+    } catch (error) {
+      console.error('获取期刊领域失败:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 根据类别获取期刊领域
+   */
+  async getJournalDomainsByCategory(category: string): Promise<any[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT id, code, name, category, category_name, description, 
+               sort_order, is_active, created_at, updated_at
+        FROM journal_domains 
+        WHERE category = $1 AND is_active = true
+        ORDER BY sort_order, name
+      `, [category]);
+
+      return result.rows;
+    } catch (error) {
+      console.error('按类别获取期刊领域失败:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 搜索期刊领域
+   */
+  async searchJournalDomains(searchTerm: string): Promise<any[]> {
+    const client = await this.pool.getClient();
+    
+    try {
+      const result = await client.query(`
+        SELECT id, code, name, category, category_name, description, 
+               sort_order, is_active, created_at, updated_at
+        FROM journal_domains 
+        WHERE (name ILIKE $1 OR description ILIKE $1 OR code ILIKE $1) 
+        AND is_active = true
+        ORDER BY 
+          CASE 
+            WHEN name ILIKE $1 THEN 1
+            WHEN code ILIKE $1 THEN 2
+            ELSE 3
+          END,
+          sort_order, name
+      `, [`%${searchTerm}%`]);
+
+      return result.rows;
+    } catch (error) {
+      console.error('搜索期刊领域失败:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 获取期刊领域统计信息
+   */
+  async getJournalDomainsStats(): Promise<{
+    total_domains: number;
+    active_domains: number;
+    categories: Array<{
+      category: string;
+      category_name: string;
+      domain_count: number;
+    }>;
+  }> {
+    const client = await this.pool.getClient();
+    
+    try {
+      // 获取总数统计
+      const totalResult = await client.query(`
+        SELECT 
+          COUNT(*) as total_domains,
+          COUNT(CASE WHEN is_active = true THEN 1 END) as active_domains
+        FROM journal_domains
+      `);
+
+      // 获取按类别统计
+      const categoryResult = await client.query(`
+        SELECT category, category_name, COUNT(*) as domain_count
+        FROM journal_domains 
+        WHERE is_active = true
+        GROUP BY category, category_name
+        ORDER BY MIN(sort_order)
+      `);
+
+      return {
+        total_domains: parseInt(totalResult.rows[0].total_domains),
+        active_domains: parseInt(totalResult.rows[0].active_domains),
+        categories: categoryResult.rows.map(row => ({
+          category: row.category,
+          category_name: row.category_name,
+          domain_count: parseInt(row.domain_count)
+        }))
+      };
+    } catch (error) {
+      console.error('获取期刊领域统计失败:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }

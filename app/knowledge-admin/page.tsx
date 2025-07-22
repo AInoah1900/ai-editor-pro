@@ -25,9 +25,16 @@ interface KnowledgeItem {
   tags: string[];
 }
 
+interface JournalDomainOption {
+  code: string;
+  name: string;
+  category_name: string;
+}
+
 export default function KnowledgeAdminPage() {
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [domains, setDomains] = useState<JournalDomainOption[]>([]);
   const [newKnowledge, setNewKnowledge] = useState<Partial<KnowledgeItem>>({
     type: 'terminology',
     domain: 'general',
@@ -38,6 +45,32 @@ export default function KnowledgeAdminPage() {
     tags: []
   });
   const [message, setMessage] = useState('');
+
+  // 获取期刊领域列表
+  const fetchDomains = async () => {
+    try {
+      const response = await fetch('/api/journal-domains?format=simple');
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setDomains(result.data.domains);
+          console.log(`✅ 获取到 ${result.data.domains.length} 个期刊领域`);
+        }
+      }
+    } catch (error) {
+      console.error('获取期刊领域失败:', error);
+      // 如果新的API失败，使用备用的硬编码选项
+      setDomains([
+        { code: 'general', name: '通用', category_name: '通用' },
+        { code: 'physics', name: '物理学', category_name: '自然科学与工程技术' },
+        { code: 'chemistry', name: '化学', category_name: '自然科学与工程技术' },
+        { code: 'biology', name: '生物学', category_name: '自然科学与工程技术' },
+        { code: 'medicine', name: '医学', category_name: '自然科学与工程技术' },
+        { code: 'engineering', name: '工程与技术', category_name: '自然科学与工程技术' },
+        { code: 'mathematics', name: '数学', category_name: '自然科学与工程技术' }
+      ]);
+    }
+  };
 
   // 获取知识库统计
   const fetchStats = async () => {
@@ -207,6 +240,7 @@ export default function KnowledgeAdminPage() {
   };
 
   useEffect(() => {
+    fetchDomains();
     fetchStats();
   }, []);
 
@@ -352,7 +386,7 @@ export default function KnowledgeAdminPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    领域
+                    领域 ({domains.length}个可选)
                   </label>
                   <select
                     value={newKnowledge.domain}
@@ -362,14 +396,16 @@ export default function KnowledgeAdminPage() {
                     })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="general">通用</option>
-                    <option value="physics">物理学</option>
-                    <option value="chemistry">化学</option>
-                    <option value="biology">生物学</option>
-                    <option value="medicine">医学</option>
-                    <option value="engineering">工程学</option>
-                    <option value="mathematics">数学</option>
+                    <option value="">请选择领域</option>
+                    {domains.map(domain => (
+                      <option key={domain.code} value={domain.code}>
+                        {domain.name} ({domain.category_name})
+                      </option>
+                    ))}
                   </select>
+                  {domains.length === 0 && (
+                    <p className="text-sm text-gray-500 mt-1">正在加载期刊领域选项...</p>
+                  )}
                 </div>
               </div>
 
