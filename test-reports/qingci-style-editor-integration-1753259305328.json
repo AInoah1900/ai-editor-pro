@@ -1,0 +1,40 @@
+{
+  "timestamp": "2025-07-23T08:28:25.324Z",
+  "feature": "清辞编校风格文档编辑器",
+  "tests": [
+    {
+      "name": "QingCiStyleEditor组件存在性",
+      "status": "passed",
+      "details": "组件文件存在"
+    },
+    {
+      "name": "清辞编校功能特性",
+      "status": "partial",
+      "details": "8/10个功能特性检测通过",
+      "coverage": "80.0%"
+    },
+    {
+      "name": "RAGEnhancedEditor集成",
+      "status": "partial",
+      "details": "4/5个集成测试通过",
+      "coverage": "80.0%"
+    },
+    {
+      "name": "TypeScript类型兼容性",
+      "status": "partial",
+      "details": "3/4个类型检查通过",
+      "coverage": "75.0%"
+    },
+    {
+      "name": "清辞编校设计特性",
+      "status": "passed",
+      "details": "5/5个设计特性实现",
+      "coverage": "100.0%"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 2,
+    "failed": 0
+  }
+}

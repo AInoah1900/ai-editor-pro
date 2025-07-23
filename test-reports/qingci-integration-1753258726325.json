@@ -1,0 +1,62 @@
+{
+  "timestamp": "2025-07-23T08:18:46.317Z",
+  "integration": "清辞编校风格编辑器",
+  "tests": [
+    {
+      "test": "QingCiStyleEditor组件文件检查",
+      "status": "PASS",
+      "message": "组件文件完整，包含所有必需功能",
+      "details": {
+        "requiredFeatures": 19
+      }
+    },
+    {
+      "test": "RAGEnhancedEditor集成检查",
+      "status": "PASS",
+      "message": "RAGEnhancedEditor集成完整，QingCi编辑器正确嵌入",
+      "details": {
+        "integrationChecks": 8
+      }
+    },
+    {
+      "test": "清辞编校功能特性检查",
+      "status": "PASS",
+      "message": "清辞编校功能特性完整，符合原版设计",
+      "details": {
+        "qingciFeatures": 21
+      }
+    },
+    {
+      "test": "错误标注集成检查",
+      "status": "PASS",
+      "message": "错误标注集成完整，保持AI分析功能",
+      "details": {
+        "annotationFeatures": 11
+      }
+    },
+    {
+      "test": "样式和UI组件检查",
+      "status": "FAIL",
+      "message": "UI组件不完整: Tailwind CSS类",
+      "details": {
+        "missingUI": [
+          "Tailwind CSS类"
+        ]
+      }
+    },
+    {
+      "test": "响应式设计检查",
+      "status": "PASS",
+      "message": "响应式设计完整，适配多种屏幕尺寸",
+      "details": {
+        "responsiveFeatures": 13
+      }
+    }
+  ],
+  "summary": {
+    "totalTests": 6,
+    "passedTests": 5,
+    "failedTests": 1,
+    "successRate": "83.3"
+  }
+}

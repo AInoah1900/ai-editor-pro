@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import QingCiStyleEditor from './QingCiStyleEditor';
 
 interface DocumentEditorProps {
   content: string;
@@ -1302,54 +1303,21 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
           </div>
         </div>
 
-        {/* 文档内容区 */}
-        <div className="flex-1 bg-white overflow-hidden flex flex-col">
-          {/* 文档内容标题栏 */}
-          <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <h4 className="text-lg font-semibold text-gray-900">文档内容（含标注）</h4>
-              </div>
-              <div className="flex items-center space-x-4 text-sm text-gray-600">
-                {documentContent && (
-                  <>
-                    <span>字符数: <strong>{documentContent.length}</strong></span>
-                    {errors.length > 0 && (
-                      <span>问题数: <strong className="text-red-600">{errors.length}</strong></span>
-                    )}
-                    {replacedContents.length > 0 && (
-                      <span>已替换: <strong className="text-blue-600">{replacedContents.length}</strong></span>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto">
-            <div className="h-full p-6">
-              <div className="max-w-4xl mx-auto h-full">
-                <div 
-                  ref={editorRef}
-                  className="h-full min-h-[600px] p-6 border border-gray-300 rounded-lg bg-white text-gray-900 text-base leading-relaxed overflow-y-auto"
-                  style={{ 
-                    fontFamily: 'Georgia, serif',
-                    maxHeight: 'calc(100vh - 250px)'
-                  }}
-                >
-                  {renderDocumentWithInlineCorrections()}
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* 清辞编校风格文档编辑区 */}
+        <div className="flex-1 bg-white overflow-hidden">
+          <QingCiStyleEditor
+            content={documentContent}
+            errors={errors}
+            onContentChange={setDocumentContent}
+            onAnalyze={analyzeDocumentWithRAG}
+            isAnalyzing={isAnalyzing}
+            ragResults={ragResults}
+          />
         </div>
       </div>
 
       {/* 右侧边栏 */}
-      <div className="w-80 bg-gray-50 border-l border-gray-200 flex flex-col h-full">
+      <div className="w-96 bg-gray-50 border-l border-gray-200 flex flex-col h-full">
         {/* 错误统计和筛选 */}
         <div className="p-4 border-b border-gray-200 bg-white">
           <div className="flex items-center justify-between mb-3">
