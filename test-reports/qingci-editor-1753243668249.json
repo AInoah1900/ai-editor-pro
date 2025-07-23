@@ -1,0 +1,265 @@
+{
+  "testTime": "2025-07-23T04:07:48.249Z",
+  "version": "v2.2.0",
+  "editorType": "清辞编校风格文档编辑器",
+  "summary": {
+    "total": 35,
+    "passed": 31,
+    "failed": 4,
+    "successRate": "88.6"
+  },
+  "details": [
+    {
+      "test": "编辑器页面访问",
+      "passed": true,
+      "message": "页面正常加载，状态码: 200",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:33.233Z"
+    },
+    {
+      "test": "清辞编校组件检查",
+      "passed": false,
+      "message": "清辞编校风格组件: 缺失",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:33.238Z"
+    },
+    {
+      "test": "格式化工具栏检查",
+      "passed": false,
+      "message": "工具栏功能: 缺失",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:33.239Z"
+    },
+    {
+      "test": "AI分析API响应",
+      "passed": false,
+      "message": "请求失败: Request timeout",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.244Z"
+    },
+    {
+      "test": "文件存在性: QingCiDocumentEditor.tsx",
+      "passed": true,
+      "message": "文件存在",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.245Z"
+    },
+    {
+      "test": "文件内容: QingCiDocumentEditor.tsx",
+      "passed": true,
+      "message": "文件大小: 19447 字符",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.245Z"
+    },
+    {
+      "test": "清辞编校核心功能",
+      "passed": true,
+      "message": "格式化功能: 完整",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.245Z"
+    },
+    {
+      "test": "颜色选择器功能",
+      "passed": true,
+      "message": "颜色选择器: 存在",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.245Z"
+    },
+    {
+      "test": "文件存在性: WorkArea.tsx",
+      "passed": true,
+      "message": "文件存在",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.245Z"
+    },
+    {
+      "test": "文件内容: WorkArea.tsx",
+      "passed": true,
+      "message": "文件大小: 76914 字符",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.246Z"
+    },
+    {
+      "test": "文件存在性: RAGEnhancedEditor.tsx",
+      "passed": true,
+      "message": "文件存在",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.246Z"
+    },
+    {
+      "test": "文件内容: RAGEnhancedEditor.tsx",
+      "passed": true,
+      "message": "文件大小: 63505 字符",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "工具栏功能: 字体格式",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "工具栏功能: 字体颜色",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "工具栏功能: 背景颜色",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "工具栏功能: 字体大小",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "工具栏功能: 字体族",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "底部功能: 清空文档",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "底部功能: 清除格式",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "底部功能: 导入文档",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "底部功能: 下载文档",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "底部功能: 统计信息",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "AI集成功能: 分析函数",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "AI集成功能: 错误显示",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "AI集成功能: 标注样式",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "AI集成功能: 文档渲染",
+      "passed": true,
+      "message": "已实现",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.248Z"
+    },
+    {
+      "test": "样式兼容: 响应式布局",
+      "passed": true,
+      "message": "兼容",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.249Z"
+    },
+    {
+      "test": "样式兼容: 边框样式",
+      "passed": true,
+      "message": "兼容",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.249Z"
+    },
+    {
+      "test": "样式兼容: 颜色主题",
+      "passed": true,
+      "message": "兼容",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.249Z"
+    },
+    {
+      "test": "样式兼容: 悬停效果",
+      "passed": true,
+      "message": "兼容",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.249Z"
+    },
+    {
+      "test": "样式兼容: 间距控制",
+      "passed": false,
+      "message": "可能存在问题",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.249Z"
+    },
+    {
+      "test": "清辞编校样式: 工具栏背景",
+      "passed": true,
+      "message": "已应用",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.249Z"
+    },
+    {
+      "test": "清辞编校样式: 按钮状态",
+      "passed": true,
+      "message": "已应用",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.249Z"
+    },
+    {
+      "test": "清辞编校样式: 颜色选择器",
+      "passed": true,
+      "message": "已应用",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.249Z"
+    },
+    {
+      "test": "清辞编校样式: 底部功能区",
+      "passed": true,
+      "message": "已应用",
+      "details": {},
+      "timestamp": "2025-07-23T04:07:48.249Z"
+    }
+  ],
+  "recommendations": [
+    "🔧 检查失败的测试项目，确保所有功能正常",
+    "📝 重点关注格式化工具和AI集成功能",
+    "🌐 访问 http://localhost:3000/editor 体验清辞编校风格编辑器",
+    "📚 参考清辞编校产品设计，持续优化用户体验",
+    "🔄 与原有RAG功能保持良好集成"
+  ]
+}

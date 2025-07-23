@@ -1,0 +1,63 @@
+{
+  "timestamp": "2025-07-23T06:31:19.897Z",
+  "totalTests": 6,
+  "passedTests": 3,
+  "failedTests": 3,
+  "details": [
+    {
+      "test": "QingCiDocumentEditor组件文件检查",
+      "status": "FAIL",
+      "message": "缺少关键功能: Bold, Italic, Underline, StrikeThrough",
+      "details": {
+        "missingFeatures": [
+          "Bold",
+          "Italic",
+          "Underline",
+          "StrikeThrough"
+        ]
+      }
+    },
+    {
+      "test": "WorkArea组件集成检查",
+      "status": "PASS",
+      "message": "WorkArea集成完整，QingCi编辑器正确嵌入",
+      "details": {
+        "integrationChecks": 6
+      }
+    },
+    {
+      "test": "TypeScript编译检查",
+      "status": "FAIL",
+      "message": "TypeScript编译失败",
+      "details": null
+    },
+    {
+      "test": "演示文档检查",
+      "status": "PASS",
+      "message": "演示文档内容完整，包含所有功能说明",
+      "details": {
+        "sections": 10,
+        "contentLength": 1136
+      }
+    },
+    {
+      "test": "样式和UI组件检查",
+      "status": "PASS",
+      "message": "样式和UI组件完整，Tailwind CSS正确应用",
+      "details": {
+        "styleChecks": 17
+      }
+    },
+    {
+      "test": "功能完整性检查",
+      "status": "FAIL",
+      "message": "核心功能缺失: applyFormat",
+      "details": {
+        "missingFunctions": [
+          "applyFormat"
+        ]
+      }
+    }
+  ],
+  "summary": "测试完成: 3/6 通过 (50.0%)"
+}
