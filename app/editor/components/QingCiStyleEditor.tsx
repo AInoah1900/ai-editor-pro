@@ -20,9 +20,15 @@ interface QingCiStyleEditorProps {
   content: string;
   errors: ErrorItem[];
   onContentChange?: (content: string) => void;
-  onAnalyze?: () => void;
-  isAnalyzing?: boolean;
-  ragResults?: any;
+  onClearText?: () => void;
+  onClearFormat?: () => void;
+  onImportDocument?: () => void;
+  onDownloadDocument?: () => void;
+  documentStats?: {
+    characters: number;
+    paragraphs: number;
+    words: number;
+  };
 }
 
 interface FormatState {
@@ -40,17 +46,19 @@ interface FormatState {
 export default function QingCiStyleEditor({ 
   content, 
   errors = [], 
-  onContentChange, 
-  onAnalyze,
-  isAnalyzing = false,
-  ragResults 
+  onContentChange,
+  onClearText,
+  onClearFormat,
+  onImportDocument,
+  onDownloadDocument,
+  documentStats
 }: QingCiStyleEditorProps) {
   const [documentContent, setDocumentContent] = useState(content);
   const [selectedText, setSelectedText] = useState('');
   const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showBgColorPicker, setShowBgColorPicker] = useState(false);
-  const [documentStats, setDocumentStats] = useState({ characters: 0, paragraphs: 0, words: 0 });
+
   
   const editorRef = useRef<HTMLDivElement>(null);
   const colorPickerRef = useRef<HTMLDivElement>(null);
@@ -68,19 +76,34 @@ export default function QingCiStyleEditor({
     alignment: 'left'
   });
 
-  // 计算文档统计信息
-  const calculateStats = useCallback((text: string) => {
-    const characters = text.length;
-    const paragraphs = text.split('\n').filter(p => p.trim().length > 0).length;
-    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+
+
+  // 将纯文本转换为HTML格式，保持原始格式
+  const convertTextToHTML = useCallback((text: string) => {
+    if (!text) return '';
     
-    setDocumentStats({ characters, paragraphs, words });
+    // 1. 转义HTML特殊字符
+    let html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    
+    // 2. 处理连续空格
+    html = html.replace(/  +/g, (match) => {
+      return '&nbsp;'.repeat(match.length);
+    });
+    
+    // 3. 处理换行符：将 \n 转换为 <br> 标签
+    html = html.replace(/\n/g, '<br>');
+    
+    return html;
   }, []);
 
   // 更新文档内容
   const handleContentChange = (newContent: string) => {
     setDocumentContent(newContent);
-    calculateStats(newContent);
     onContentChange?.(newContent);
   };
 
@@ -149,10 +172,17 @@ export default function QingCiStyleEditor({
   const renderDocumentWithAnnotations = () => {
     if (!documentContent) return '';
     
+    // 首先将整个文档转换为HTML格式
+    let htmlContent = convertTextToHTML(documentContent);
+    
     if (errors.length === 0) {
-      return documentContent;
+      return htmlContent;
     }
 
+    // 如果有错误，需要在HTML内容中插入错误标注
+    // 但这需要重新计算位置，因为HTML转换会改变字符位置
+    // 为了简化，我们先使用原始文本进行错误标注，然后转换
+    
     // 按位置排序错误
     const sortedErrors = [...errors].sort((a, b) => a.position.start - b.position.start);
     
@@ -161,20 +191,23 @@ export default function QingCiStyleEditor({
 
     sortedErrors.forEach((error) => {
       // 添加错误前的正常文本
-      result += documentContent.slice(lastIndex, error.position.start);
+      const beforeText = documentContent.slice(lastIndex, error.position.start);
+      result += convertTextToHTML(beforeText);
       
       // 添加带标注的错误文本
       const errorClass = error.type === 'error' ? 'error-annotation' : 
                         error.type === 'warning' ? 'warning-annotation' : 
                         'suggestion-annotation';
       
-      result += `<span class="${errorClass}" title="${error.reason}: ${error.suggestion}" data-error-id="${error.id}">${error.original}</span>`;
+      const errorText = convertTextToHTML(error.original);
+      result += `<span class="${errorClass}" title="${error.reason}: ${error.suggestion}" data-error-id="${error.id}">${errorText}</span>`;
       
       lastIndex = error.position.end;
     });
     
     // 添加最后的正常文本
-    result += documentContent.slice(lastIndex);
+    const afterText = documentContent.slice(lastIndex);
+    result += convertTextToHTML(afterText);
     
     return result;
   };
@@ -216,72 +249,18 @@ export default function QingCiStyleEditor({
     );
   };
 
-  // 清空文本
-  const clearText = () => {
-    if (confirm('确定要清空所有文档内容吗？')) {
-      handleContentChange('');
-      if (editorRef.current) {
-        editorRef.current.innerHTML = '';
-      }
-    }
-  };
 
-  // 清除格式
-  const clearFormat = () => {
-    document.execCommand('removeFormat', false);
-    setFormatState({
-      bold: false,
-      italic: false,
-      underline: false,
-      strikethrough: false,
-      color: '#000000',
-      backgroundColor: '#ffffff',
-      fontSize: '14px',
-      fontFamily: '宋体',
-      alignment: 'left'
-    });
-  };
-
-  // 导入文档
-  const importDocument = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.txt,.docx,.doc';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const content = e.target?.result as string;
-          handleContentChange(content);
-          if (editorRef.current) {
-            editorRef.current.innerHTML = content;
-          }
-        };
-        reader.readAsText(file);
-      }
-    };
-    input.click();
-  };
-
-  // 下载文档
-  const downloadDocument = () => {
-    const blob = new Blob([documentContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `document_${Date.now()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
 
   // 监听内容变化
   useEffect(() => {
     setDocumentContent(content);
-    calculateStats(content);
-  }, [content, calculateStats]);
+    
+    // 当文档内容变化时，更新编辑器的HTML内容
+    if (editorRef.current && content) {
+      const htmlContent = convertTextToHTML(content);
+      editorRef.current.innerHTML = htmlContent;
+    }
+  }, [content, convertTextToHTML]);
 
   // 点击外部关闭颜色选择器
   useEffect(() => {
@@ -524,27 +503,7 @@ export default function QingCiStyleEditor({
             </button>
           </div>
 
-          {/* AI分析按钮 */}
-          <div className="ml-auto">
-            <button
-              onClick={onAnalyze}
-              disabled={isAnalyzing}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                isAnalyzing
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-            >
-              {isAnalyzing ? (
-                <div className="flex items-center space-x-2">
-                  <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div>
-                  <span>AI分析中...</span>
-                </div>
-              ) : (
-                '🔍 AI分析'
-              )}
-            </button>
-          </div>
+
         </div>
       </div>
 
@@ -562,7 +521,7 @@ export default function QingCiStyleEditor({
             minHeight: '400px'
           }}
           onInput={(e) => {
-            const content = e.currentTarget.textContent || '';
+            const content = e.currentTarget.innerHTML || '';
             handleContentChange(content);
           }}
           onMouseUp={handleTextSelection}
@@ -571,64 +530,7 @@ export default function QingCiStyleEditor({
         />
       </div>
 
-      {/* 底部功能区 */}
-      <div className="border-t border-gray-200 bg-gray-50 p-4" data-testid="qingci-bottom-toolbar">
-        <div className="flex items-center justify-between">
-          {/* 左侧功能按钮 */}
-          <div className="flex items-center space-x-3">
-            <button 
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
-              title="加入词库"
-            >
-              📚 加入词库
-            </button>
-            
-            <button 
-              onClick={clearText}
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
-              title="清空文本"
-            >
-              🧹 清空文本
-            </button>
-            
-            <button 
-              onClick={clearFormat}
-              className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm"
-              title="清除格式"
-            >
-              🎨 清除格式
-            </button>
-            
-            <button 
-              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm"
-              title="链接校对"
-            >
-              🔗 链接校对
-            </button>
-            
-            <button 
-              onClick={importDocument}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-              title="导入文档"
-            >
-              📁 导入
-            </button>
-            
-            <button 
-              onClick={downloadDocument}
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm"
-              title="下载文档"
-            >
-              💾 下载
-            </button>
-          </div>
 
-          {/* 右侧统计信息 */}
-          <div className="text-sm text-gray-600">
-            <span>共 {documentStats.characters} 字</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 } 

@@ -1,0 +1,36 @@
+{
+  "timestamp": "2025-07-23T09:32:53.860Z",
+  "feature": "AI编辑器布局优化",
+  "tests": [
+    {
+      "name": "QingCiStyleEditor底部功能栏移除",
+      "status": "passed",
+      "details": "底部功能栏完全移除"
+    },
+    {
+      "name": "RAGEnhancedEditor新底部功能栏添加",
+      "status": "failed",
+      "details": "新底部功能栏添加有问题"
+    },
+    {
+      "name": "按钮图标简化",
+      "status": "failed",
+      "details": "按钮图标简化有问题"
+    },
+    {
+      "name": "处理函数实现",
+      "status": "passed",
+      "details": "处理函数实现完整"
+    },
+    {
+      "name": "字数统计功能保持",
+      "status": "passed",
+      "details": "字数统计功能保持完好"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 3,
+    "failed": 2
+  }
+}

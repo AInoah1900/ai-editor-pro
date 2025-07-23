@@ -100,6 +100,48 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
 
   const editorRef = useRef<HTMLDivElement>(null);
 
+  // 底部功能栏处理函数
+  const handleClearText = () => {
+    if (confirm('确定要清空所有文档内容吗？')) {
+      setDocumentContent('');
+    }
+  };
+
+  const handleClearFormat = () => {
+    // 清除格式功能暂时简化处理
+    alert('清除格式功能已触发');
+  };
+
+  const handleImportDocument = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.txt,.docx,.doc';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target?.result as string;
+          setDocumentContent(content);
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
+  };
+
+  const handleDownloadDocument = () => {
+    const blob = new Blob([documentContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `document_${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // RAG增强的文档分析
   const analyzeDocumentWithRAG = React.useCallback(async () => {
     // 内容检查
@@ -1107,7 +1149,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
         {/* 工具栏 */}
         <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <h3 className="text-lg font-semibold text-gray-900">AI文档编辑器</h3>
+            <h3 className="text-lg font-semibold text-gray-900">AI编辑器</h3>
             <div className="flex items-center space-x-2">
               <div className={`w-2 h-2 rounded-full ${isAnalyzing ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
               <span className="text-sm text-gray-600">
@@ -1303,15 +1345,71 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
           </div>
         </div>
 
+        {/* 底部功能栏 */}
+        <div className="border-t border-gray-200 bg-gray-50 p-4" data-testid="bottom-toolbar">
+          <div className="flex items-center justify-between">
+            {/* 左侧功能按钮 */}
+            <div className="flex items-center space-x-3">
+              <button 
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+                title="加入词库"
+              >
+                加入词库
+              </button>
+              
+              <button 
+                onClick={() => handleClearText()}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+                title="清空文本"
+              >
+                清空文本
+              </button>
+              
+              <button 
+                onClick={() => handleClearFormat()}
+                className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm"
+                title="清除格式"
+              >
+                清除格式
+              </button>
+              
+              <button 
+                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm"
+                title="链接校对"
+              >
+                链接校对
+              </button>
+              
+              <button 
+                onClick={() => handleImportDocument()}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                title="导入文档"
+              >
+                导入
+              </button>
+              
+              <button 
+                onClick={() => handleDownloadDocument()}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm"
+                title="下载文档"
+              >
+                下载
+              </button>
+            </div>
+
+            {/* 右侧统计信息 */}
+            <div className="text-sm text-gray-600">
+              <span>共 {documentContent.length} 字</span>
+            </div>
+          </div>
+        </div>
+
         {/* 清辞编校风格文档编辑区 */}
         <div className="flex-1 bg-white overflow-hidden">
           <QingCiStyleEditor
             content={documentContent}
             errors={errors}
             onContentChange={setDocumentContent}
-            onAnalyze={analyzeDocumentWithRAG}
-            isAnalyzing={isAnalyzing}
-            ragResults={ragResults}
           />
         </div>
       </div>

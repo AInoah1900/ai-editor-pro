@@ -706,7 +706,14 @@ export default function WorkArea({
   const renderContent = () => {
     switch (activeSubMenu) {
       case 'upload':
-        return (
+        // 如果已经有上传的文档，显示编辑器而不是上传页面
+        return uploadedDocument ? (
+          <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-hidden">
+              <RAGEnhancedEditor content={uploadedDocument} />
+            </div>
+          </div>
+        ) : (
           <UploadArea 
             onFileUpload={setUploadedDocument}
             onSwitchToEditor={() => setActiveSubMenu('rag-editor')}
