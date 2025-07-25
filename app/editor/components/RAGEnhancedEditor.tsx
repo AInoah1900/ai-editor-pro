@@ -79,7 +79,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
     suggestion: false
   });
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [isUsingRAG, setIsUsingRAG] = useState(true);
+  // 统一使用RAG增强版API，移除选择开关
 
   // 新增状态：替换后内容记录
   const [replacedContents, setReplacedContents] = useState<ReplacedContent[]>([]);
@@ -305,8 +305,8 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
         timestamp: new Date()
       }]);
 
-              // RAG用户反馈学习
-        if (isUsingRAG && ragResults) {
+              // RAG用户反馈学习（统一使用RAG增强版）
+        if (ragResults) {
           try {
             const response = await fetch('/api/knowledge-base', {
               method: 'PUT',
@@ -340,8 +340,8 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
   const ignoreError = async (errorId: string) => {
     const error = errors.find(e => e.id === errorId);
     
-    // RAG用户反馈学习
-    if (isUsingRAG && ragResults && error) {
+    // RAG用户反馈学习（统一使用RAG增强版）
+    if (ragResults && error) {
       try {
         const response = await fetch('/api/knowledge-base', {
           method: 'PUT',
@@ -390,7 +390,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
         }]);
 
         // RAG用户反馈学习 - 自定义编辑
-        if (isUsingRAG && ragResults) {
+        if (ragResults) {
           try {
             const response = await fetch('/api/knowledge-base', {
               method: 'PUT',
@@ -579,7 +579,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
               <div>
                 <h3 className="text-blue-800 font-semibold text-lg">🔍 AI正在分析文档...</h3>
                 <p className="text-blue-700 text-sm mt-1">
-                  {isUsingRAG ? '✨ 使用RAG知识库进行深度分析' : '🎯 执行基础AI分析'}
+                  ✨ 使用RAG知识库进行深度分析
                 </p>
               </div>
             </div>
@@ -629,13 +629,13 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
               <div>
                 <h3 className="text-green-800 font-semibold text-lg">✨ 文档质量优秀</h3>
                 <p className="text-green-700 text-sm mt-1">
-                  {isUsingRAG ? '✨ RAG知识库深度分析未发现问题' : '🎯 AI分析未发现问题'}
+                  ✨ RAG知识库深度分析未发现问题
                 </p>
               </div>
             </div>
             
             {/* RAG信息显示 */}
-            {isUsingRAG && ragResults && (
+            {ragResults && (
               <div className="mt-3 pt-3 border-t border-green-200">
                 <div className="flex items-center space-x-6 text-sm">
                   {(() => {
@@ -651,7 +651,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                         {suggestionCount > 0 && <span className="text-green-600">💡 建议: <strong>{suggestionCount}</strong></span>}
                         
                         {/* RAG信息 */}
-                        {isUsingRAG && ragResults && (
+                        {ragResults && (
                           <>
                             <span className="text-blue-600">🎯 领域: <strong>{ragResults.domain_info?.domain || '通用'}</strong></span>
                             <span className="text-blue-700">RAG置信度: </span>
@@ -897,7 +897,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
               <div>
                 <h3 className="text-orange-800 font-semibold text-lg">📋 分析完成</h3>
                 <p className="text-orange-700 text-sm mt-1">
-                  {isUsingRAG ? `✨ 基于RAG知识库分析，发现 ${sortedErrors.length} 个问题` : `🎯 基础AI分析完成，发现 ${sortedErrors.length} 个问题`}
+                  {`✨ 基于RAG知识库分析，发现 ${sortedErrors.length} 个问题`}
                   {replacedContents.length > 0 && (
                     <span className="ml-2 text-blue-700">
                       · 已替换 <strong>{replacedContents.length}</strong> 处
@@ -923,7 +923,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                       {suggestionCount > 0 && <span className="text-green-600">💡 建议: <strong>{suggestionCount}</strong></span>}
                       
                       {/* RAG信息 */}
-                      {isUsingRAG && ragResults && (
+                      {ragResults && (
                         <>
                           <span className="text-blue-600">🎯 领域: <strong>{ragResults.domain_info?.domain || '通用'}</strong></span>
                           <span className="text-blue-700">RAG置信度: </span>
@@ -1001,7 +1001,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
             <div>
               <h3 className="text-orange-800 font-semibold text-lg">📋 分析完成</h3>
               <p className="text-orange-700 text-sm mt-1">
-                {isUsingRAG ? `✨ 基于RAG知识库分析，发现 ${sortedErrors.length} 个问题` : `🎯 基础AI分析完成，发现 ${sortedErrors.length} 个问题`}
+                {`✨ 基于RAG知识库分析，发现 ${sortedErrors.length} 个问题`}
                 {replacedContents.length > 0 && (
                   <span className="ml-2 text-blue-700">
                     · 已替换 <strong>{replacedContents.length}</strong> 处
@@ -1027,7 +1027,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                     {suggestionCount > 0 && <span className="text-green-600">💡 建议: <strong>{suggestionCount}</strong></span>}
                     
                     {/* RAG信息 */}
-                    {isUsingRAG && ragResults && (
+                    {ragResults && (
                       <>
                         <span className="text-blue-600">🎯 领域: <strong>{ragResults.domain_info?.domain || '通用'}</strong></span>
                         <span className="text-blue-700">RAG置信度: </span>
@@ -1153,21 +1153,14 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
             <div className="flex items-center space-x-2">
               <div className={`w-2 h-2 rounded-full ${isAnalyzing ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
               <span className="text-sm text-gray-600">
-                {isAnalyzing ? (isUsingRAG ? 'AI分析中...' : 'AI分析中...') : (isUsingRAG ? 'AI分析完成' : 'AI分析完成')}
+                {isAnalyzing ? 'AI分析中...' : 'AI分析完成'}
               </span>
             </div>
             
-            {/* RAG功能开关 */}
+            {/* 统一使用RAG增强版，移除选择开关 */}
             <div className="flex items-center space-x-2">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={isUsingRAG}
-                  onChange={(e) => setIsUsingRAG(e.target.checked)}
-                  className="mr-2"
-                />
-                <span className="text-sm text-blue-600 font-medium">RAG增强</span>
-              </label>
+              <span className="text-sm text-blue-600 font-medium">RAG增强分析</span>
+              {/* <span className="text-xs text-gray-500">(已启用)</span> */}
             </div>
           </div>
           
@@ -1184,7 +1177,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
               disabled={isAnalyzing}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
-              {isAnalyzing ? '分析中...' : (isUsingRAG ? 'AI分析' : '重新分析')}
+              {isAnalyzing ? '分析中...' : 'AI分析'}
             </button>
             
             <div className="flex items-center space-x-4 text-sm">
@@ -1205,7 +1198,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
         </div>
 
         {/* RAG增强信息面板 */}
-        {isUsingRAG && ragResults && (
+        {ragResults && (
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-b border-blue-200 p-3">
             <div className="flex items-start space-x-4 text-sm">
               <div className="flex items-center space-x-2">
@@ -1310,7 +1303,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
               <div>
                 <div className="font-medium mb-1">使用说明:</div>
                 <div className="text-xs leading-relaxed">
-                  {isUsingRAG ? 'RAG增强模式已启用，基于专业知识库提供更精确的纠错建议' : '使用基础AI分析模式'}
+                  'RAG增强模式已启用，基于专业知识库提供更精确的纠错建议'
                   <br />点击彩色标注查看建议 → 浮动菜单操作 → 一键替换或编辑
                 </div>
               </div>
@@ -1442,7 +1435,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
         </div>
 
         {/* RAG知识库信息 */}
-        {isUsingRAG && ragResults && ragResults.knowledge_used.length > 0 && (
+        {ragResults && ragResults.knowledge_used.length > 0 && (
           <div className="p-4 border-b border-gray-200 bg-white">
             <h5 className="font-medium text-gray-900 mb-3 flex items-center">
               <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
