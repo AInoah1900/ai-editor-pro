@@ -1,0 +1,38 @@
+{
+  "timestamp": "2025-07-25T01:24:29.894Z",
+  "totalTests": 6,
+  "passedTests": 6,
+  "successRate": 100,
+  "results": [
+    {
+      "name": "API文件删除",
+      "success": true,
+      "error": null
+    },
+    {
+      "name": "RAG API功能",
+      "success": true,
+      "error": null
+    },
+    {
+      "name": "API辅助工具",
+      "success": true,
+      "error": null
+    },
+    {
+      "name": "编辑器组件",
+      "success": true,
+      "error": null
+    },
+    {
+      "name": "回退逻辑移除",
+      "success": true,
+      "error": null
+    },
+    {
+      "name": "基础API不可访问",
+      "success": true,
+      "error": null
+    }
+  ]
+}

@@ -53,15 +53,22 @@ async function testDeepSeekConfigAPI() {
 }
 
 /**
- * 测试文档分析API (使用新的聊天接口)
+ * 基础文档分析API已移除 (现在统一使用RAG增强版)
  */
 async function testDocumentAnalysisAPI() {
-  console.log('\n📄 测试文档分析API');
+  console.log('\n📄 基础文档分析API已移除');
   console.log('=' .repeat(50));
+  console.log('ℹ️  基础文档分析API已移除，统一使用RAG增强版API');
+  console.log('📈 RAG增强版API包含了基础版的所有功能，且分析质量更高');
   
   const testDocument = '基于超音速数值仿真下多脉冲约束弹体的修正策略研究研究综述';
   
   try {
+    // 直接返回跳过的结果，不实际调用已移除的API
+    console.log('⏭️  跳过基础API测试，推荐使用RAG增强版API测试');
+    
+    // 注释掉已移除的基础版API调用
+    /*
     const startTime = Date.now();
     
     const response = await fetch(`${TEST_CONFIG.apiBaseURL}/api/analyze-document`, {
@@ -71,7 +78,20 @@ async function testDocumentAnalysisAPI() {
       },
       body: JSON.stringify({ content: testDocument })
     });
+    */
     
+    // 返回跳过的结果
+    return {
+      success: true,
+      skipped: true,
+      reason: '基础API已移除，统一使用RAG增强版API',
+      duration: 0,
+      errorsFound: 0,
+      hasProvider: false
+    };
+    
+    // 注释掉已移除API的响应处理代码
+    /*
     const duration = Date.now() - startTime;
     
     if (!response.ok) {
@@ -97,6 +117,7 @@ async function testDocumentAnalysisAPI() {
       errorsFound: result.errors?.length || 0,
       hasProvider: Boolean(result.provider)
     };
+    */
     
   } catch (error) {
     console.error('❌ 文档分析失败:', error.message);

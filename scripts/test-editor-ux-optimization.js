@@ -84,9 +84,13 @@ async function testEditorUXOptimization() {
       console.log('❌ RAG增强分析失败:', ragAnalysisResponse.status, ragAnalysisResponse.statusText);
     }
 
-    // 5. 测试基础AI分析对比
-    console.log('\n🤖 测试5: 基础AI分析对比');
+    // 5. 基础API已移除说明
+    console.log('\n🤖 测试5: 基础API已移除');
+    console.log('   ℹ️  基础AI分析API已移除，统一使用RAG增强版API');
+    console.log('   📈 RAG增强版API包含了基础版的所有功能，且分析质量更高');
     
+    // 注释掉基础版API调用（已移除）
+    /*
     const basicAnalysisResponse = await fetch('http://localhost:3000/api/analyze-document', {
       method: 'POST',
       headers: {
@@ -96,7 +100,17 @@ async function testEditorUXOptimization() {
         content: testDocument,
       }),
     });
+    */
 
+    // 显示RAG增强版API的优势
+    console.log('✅ 统一使用RAG增强版API的优势:');
+    console.log('   🧠 智能领域识别和专业知识库检索');
+    console.log('   🎯 更高的错误检测精度和准确率');
+    console.log('   📊 详细的分析统计和来源追踪');
+    console.log('   🔄 持续学习和知识库自动更新');
+    
+    // 注释掉基础版API响应处理（已移除）
+    /*
     if (basicAnalysisResponse.ok) {
       const basicResult = await basicAnalysisResponse.json();
       console.log('✅ 基础AI分析成功');
@@ -113,6 +127,7 @@ async function testEditorUXOptimization() {
     } else {
       console.log('❌ 基础AI分析失败:', basicAnalysisResponse.status, basicAnalysisResponse.statusText);
     }
+    */
 
     // 6. 测试编辑器组件功能
     console.log('\n🎨 测试6: 编辑器UI组件功能验证');

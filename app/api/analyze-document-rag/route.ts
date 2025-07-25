@@ -429,35 +429,20 @@ ${formatKnowledge(multiKnowledgeResult.combined_knowledge)}`
   } catch (error: unknown) {
     console.error('RAG增强分析失败:', error instanceof Error ? error.message : String(error));
     
-    // 最终降级到原有方法
-    try {
-      const { content } = await request.json();
-      const fallbackResponse = await fetch(`${request.nextUrl.origin}/api/analyze-document`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
-      });
-      
-      if (fallbackResponse.ok) {
-        const fallbackResult = await fallbackResponse.json();
-        return NextResponse.json({
-          ...fallbackResult,
-          domain_info: { domain: 'unknown', confidence: 0, keywords: [] },
-          knowledge_used: [],
-          rag_confidence: 0,
-          fallback_used: true
-        });
-      }
-    } catch (fallbackError: unknown) {
-      console.error('降级分析也失败:', fallbackError instanceof Error ? fallbackError.message : String(fallbackError));
-    }
-    
+    // 返回详细的错误信息，帮助用户诊断问题
     return NextResponse.json({
       error: 'RAG增强分析失败',
+      error_details: error instanceof Error ? error.message : String(error),
       domain_info: { domain: 'unknown', confidence: 0, keywords: [] },
       knowledge_used: [],
       rag_confidence: 0,
-      fallback_used: true
+      errors: [],
+      suggestions: [
+        '请检查网络连接是否正常',
+        '请确认DeepSeek API配置是否正确',
+        '请检查知识库服务是否可用',
+        '如果问题持续存在，请联系技术支持'
+      ]
     }, { status: 500 });
   }
 }
@@ -1545,10 +1530,10 @@ function generateEmergencyJsonFromThink(thinkContent: string): string | null {
   } catch (error) {
     console.error('❌ 应急JSON生成失败:', error);
     
-    // 最后的备用方案
-    const fallbackResponse = {
+    // 最后的应急响应方案
+    const emergencyResponse = {
       errors: [{
-        id: `emergency_fallback_${Date.now()}`,
+        id: `emergency_${Date.now()}`,
         type: 'warning' as const,
         position: { start: 0, end: 100 },
         original: '文档内容',
@@ -1558,7 +1543,7 @@ function generateEmergencyJsonFromThink(thinkContent: string): string | null {
       }]
     };
     
-    return JSON.stringify(fallbackResponse, null, 2);
+    return JSON.stringify(emergencyResponse, null, 2);
   }
 }
 

@@ -152,13 +152,12 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
 
     setIsAnalyzing(true);
     try {
-      const endpoint = isUsingRAG ? '/api/analyze-document-rag' : '/api/analyze-document';
+      // 统一使用RAG增强版API，提供最佳分析体验
+      const endpoint = '/api/analyze-document-rag';
       
-      console.log('发送分析请求:', { endpoint, contentLength: documentContent.length, isUsingRAG });
+      console.log('发送分析请求:', { endpoint, contentLength: documentContent.length });
       
-      const requestBody = isUsingRAG 
-        ? { content: documentContent, ownerId: 'default_user' } // 传递用户ID，实际应用中应从认证系统获取
-        : { content: documentContent };
+      const requestBody = { content: documentContent, ownerId: 'default_user' }; // 传递用户ID，实际应用中应从认证系统获取
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -183,7 +182,8 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
         const result = await response.json();
         console.log('分析结果:', result);
         
-        if (isUsingRAG && result.domain_info) {
+        // RAG增强版API始终返回domain_info
+        if (result.domain_info) {
           setRagResults(result);
           
           // 显示多知识库使用情况
@@ -259,7 +259,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [documentContent, isUsingRAG]);
+  }, [documentContent]);
 
   // 获取错误类型的样式
   const getErrorStyle = (type: string) => {

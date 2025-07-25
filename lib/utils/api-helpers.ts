@@ -76,9 +76,11 @@ export async function safeApiCall<T = any>(
 
 /**
  * 用于文档分析的API调用
+ * 统一使用RAG增强版API，提供最佳的分析体验
  */
-export async function analyzeDocument(content: string, useRAG: boolean = false) {
-  const endpoint = useRAG ? '/api/analyze-document-rag' : '/api/analyze-document';
+export async function analyzeDocument(content: string, useRAG: boolean = true) {
+  // 统一使用RAG增强版API，因为它包含了基础版的所有功能，且有更好的错误处理
+  const endpoint = '/api/analyze-document-rag';
   
   return safeApiCall(endpoint, {
     method: 'POST',

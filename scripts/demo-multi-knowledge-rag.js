@@ -146,8 +146,14 @@ async function demoMultiKnowledgeRAG() {
     console.log('   5. 📈 统计追踪：详细的多知识库使用统计');
     console.log('');
     
-    // 7. 对比基础API
-    console.log('🔄 对比基础API效果...');
+    // 7. 基础API已移除说明
+    console.log('ℹ️  基础API已移除，统一使用RAG增强版API');
+    console.log('   📈 RAG增强版API包含了基础版的所有功能，且具有更好的分析能力');
+    console.log('   🎯 系统架构更加简洁，维护更加方便');
+    console.log('');
+    
+    // 注释掉基础版API调用（已移除）
+    /*
     const basicResponse = await fetch(`${DEMO_CONFIG.baseUrl}/api/analyze-document`, {
       method: 'POST',
       headers: {
@@ -157,21 +163,15 @@ async function demoMultiKnowledgeRAG() {
         content: DEMO_CONFIG.testDocument
       }),
     });
+    */
     
-    if (basicResponse.ok) {
-      const basicResult = await basicResponse.json();
-      console.log(`   基础API检测: ${basicResult.errors?.length || 0} 个问题`);
-      console.log(`   RAG API检测: ${ragResult.errors?.length || 0} 个问题`);
-      
-      const improvement = ((ragResult.errors?.length || 0) - (basicResult.errors?.length || 0));
-      if (improvement > 0) {
-        console.log(`   🎉 RAG增强效果: 多检测了 ${improvement} 个问题`);
-      } else if (improvement === 0) {
-        console.log(`   📊 RAG增强效果: 检测数量相当，但质量更高`);
-      } else {
-        console.log(`   🎯 RAG增强效果: 更精准的检测，减少误报`);
-      }
-    }
+    // 基础API已移除，显示RAG增强版API的优势
+    console.log(`   🎯 RAG增强版API检测: ${ragResult.errors?.length || 0} 个问题`);
+    console.log('   ✨ RAG增强版API优势:');
+    console.log('      - 🧠 基于专业知识库的智能分析');  
+    console.log('      - 🎯 更高的检测精度和准确率');
+    console.log('      - 🔄 多知识库并行检索能力');
+    console.log('      - 📊 详细的领域分析和统计信息');
     
     console.log('');
     console.log('=' .repeat(60));
