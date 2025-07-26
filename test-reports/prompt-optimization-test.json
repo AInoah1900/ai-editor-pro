@@ -1,0 +1,258 @@
+{
+  "timestamp": "2025-07-25T23:14:48.420Z",
+  "testConfig": {
+    "baseUrl": "http://localhost:3000",
+    "testDocuments": [
+      {
+        "name": "学术论文样本",
+        "content": "基于超音速数值仿真下多脉冲约束弹体的修正策略研究综述\n\n摘要：本文主要研究了在超音速飞行条件下，多脉冲约束条件对弹体飞行轨迹的影响机制。通过数值仿真方法，分析了不同脉冲序列对弹体修正效果的影响。研究结果表明，合理的脉冲序列设计能够显著提高弹体的制导精度和飞行稳定性。\n      \n1 引言\n      \n在现代精确制导武器系统中，弹体飞行过程中的轨迹修正是提高命中精度的关键技术之一。随着超音速飞行技术的发展，如何在高速飞行状态下实现有效的轨迹修正成为了研究热点问题。多脉冲约束修正技术作为一种新兴的修正方式，具有响应速度快、修正精度高等优点，在军用和民用领域都有广泛的应用前景。\n      \n本文将从数值仿真的角度，深入研究多脉冲约束条件下弹体修正策略的优化问题。",
+        "domain": "academic"
+      },
+      {
+        "name": "技术文档样本",
+        "content": "智能编辑系统架构设计与实现\n\n1.系统概述\n\n本系统是基于人工智能技术的智能编辑平台，主要功能包括：文档智能校对，语法检查、术语统一等功能。系统采用了先进的深度学习算法，能够自动识别文档中的各种错误，并提供修改建议。\n\n2.技术架构  \n\n系统采用前后端分离的架构设计，前端使用React框架，后端采用Node.js + Express。数据存储使用PostgreSQL数据库，向量存储使用Qdrant。整个系统部署在Docker容器中，支持水平扩展。\n\n关键技术包括：\n- 自然语言处理(NLP)\n- 机器学习(ML)  \n- 知识图谱技术\n- 向量数据库检索",
+        "domain": "technical"
+      }
+    ]
+  },
+  "results": [
+    {
+      "success": true,
+      "duration": 175840,
+      "result": {
+        "errors": [
+          {
+            "id": "rag_error_1753485066211_0_mof6x6eon",
+            "type": "suggestion",
+            "position": {
+              "start": 0,
+              "end": 26
+            },
+            "original": "基于超音速数值仿真下多脉冲约束弹体的修正策略研究综述",
+            "suggestion": "基于超音速数值仿真的多脉冲约束弹体修正策略研究综述",
+            "reason": "原标题中'下'字多余且不符合学术简洁性；根据GB/T 7713.2—2022学术论文编写规则（知识库来源），标题应简洁明确，避免冗余词汇。知识库'投稿要求.docx'强调标题需直接反映研究内容，提升可读性。",
+            "category": "语言表达",
+            "risks": "无明显法律、事实或价值观问题"
+          },
+          {
+            "id": "rag_error_1753485066211_1_44sum80ux",
+            "type": "suggestion",
+            "position": {
+              "start": 31,
+              "end": 38
+            },
+            "original": "本文主要研究了",
+            "suggestion": "本研究探讨了",
+            "reason": "'主要'一词略显口语化，不符合学术严谨性；根据GB/T 7713.2—2022标准（知识库来源），摘要开头应使用正式、简洁的表达如'本研究探讨了'或'本文研究了'，以避免口语化影响专业性。知识库'WPS黑马校对V31单机版使用手册'支持语言优化建议。",
+            "category": "语言表达",
+            "risks": "无明显法律、事实或价值观问题"
+          },
+          {
+            "id": "rag_error_1753485066211_2_auararypc",
+            "type": "error",
+            "position": {
+              "start": 141,
+              "end": 145
+            },
+            "original": "1 引言",
+            "suggestion": "1. 引言",
+            "reason": "标题层级缺少点号，不符合GB/T 7713.2—2022学术论文编写规则（知识库来源），该标准要求层级标题使用'1. '、'1.1 '等格式确保统一性。知识库'投稿要求.docx'也强调标题格式规范性。",
+            "category": "格式规范",
+            "risks": "无明显法律、事实或价值观问题"
+          },
+          {
+            "id": "rag_error_1753485066211_3_0ngccl4wa",
+            "type": "suggestion",
+            "position": {
+              "start": 225,
+              "end": 234
+            },
+            "original": "成为了研究热点问题",
+            "suggestion": "已成为研究热点问题",
+            "reason": "'成为了'在正式学术写作中应改为'已成为'，以提升语言严谨性；根据GB/T 7713.2—2022标准（知识库来源），避免使用口语化表达，确保学术风格统一。知识库'WPS黑马校对V31单机版使用手册'建议优化语法流畅性。",
+            "category": "语言表达",
+            "risks": "无明显法律、事实或价值观问题"
+          },
+          {
+            "id": "rag_error_1753485066211_4_us4q3o8fd",
+            "type": "suggestion",
+            "position": {
+              "start": 299,
+              "end": 310
+            },
+            "original": "本文将从数值仿真的角度",
+            "suggestion": "本文旨在从数值仿真的角度",
+            "reason": "添加'旨在'使研究目的更清晰，符合学术写作惯例；根据GB/T 7713.2—2022标准（知识库来源），引言结尾应明确研究意图，强化逻辑结构。知识库'投稿要求.docx'强调学术表达的严谨性优化。",
+            "category": "语言表达",
+            "risks": "无明显法律、事实或价值观问题"
+          }
+        ],
+        "domain_info": {
+          "domain": "academic",
+          "confidence": 0.5666666666666667,
+          "keywords": [
+            "研究",
+            "方法",
+            "分析"
+          ]
+        },
+        "knowledge_used": [
+          "投稿要求.docx - DOCX文档",
+          "\n\n\n\n\n\n\n\n\n\n\n\nWPS黑马校对V31单机版\n\n客户端版\n\n                使用手册\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n北京金山办公软件股份有限公司\n\n电话：400-677-5005\n\n网址：www.wps.cn/darkhorse\n\n地址：北京市海淀区小营西路33号金山软件大厦\n\n\n\n\n\n\n\n\n\n目录\n\n1. 概述\t1\n\n1.1产品概述\t1\n\n1.2术语说明\t2\n\n2. 安装\t3\n\n2.1安装\t3\n\n2.1.1 Windows版\t3\n\n2.1.2 Linux版\t4\n\n2.2 激活服务\t5\n\n2.3卸载\t6\n\n2.3.1卸载Windows版\t6\n\n2.3.2卸载Linux版\t7\n\n3. WPS插件使用介绍\t3\n\n3.1校对能力\t3\n\n3.1.1校对\t3\n\n3.1.2从头校对\t6\n\n3.1.3批量校对\t7\n\n3.1.4校对领导人排序\t8\n\n3.1.5标点检查\t9\n\n3.1.6成批查找\t9\n\n3.2词库管理\t12\n\n3.2.1正词词库\t12\n\n3.2.2 错词词库\t14\n\n3.2.3 重点词库\t16\n\n3.2.4 领导人职务库\t17\n\n3.2.5 领导人排序库\t18\n\n3.2.6 添加正词\t20\n\n3.2.7 添加错词\t21\n\n3.3系统设置\t22\n\n3.3.1 参数设置\t22\n\n3.3.2 标记设置\t24\n\n3.3.3 挂接专业库\t25\n\n3.3.4 关于黑马\t26\n\n3.4其他操作\t27\n\n3.4.1 上一处&下一处\t27\n\n3.4.2 清除标记\t27\n\n3.4.3 清除全部\t28\n\n4. Word插件使用介绍\t30\n\n4.1校对文件\t30\n\n4.1.1校对当前文件\t30\n\n4.1.2 批量校对\t31\n\n4.1.3 校对标点\t31\n\n4.1.4 领导人排序\t32\n\n4.1.5自动纠错\t32\n\n4.1.6保存校对结果\t32\n\n4.2处理校对结果\t32\n\n4.2.1定位到错词\t32\n\n4.2.2使用修改建议\t33\n\n4.2.3处理颜色标记\t34\n\n4.2.4生成简略勘误表\t34\n\n4.2.5添加正词\t34\n\n4.2.6添加错词\t35\n\n4.3设置校对系统\t36\n\n4.3.1参数设置\t36\n\n4.3.2挂接专业库\t38\n\n4.3.3其他参数\t39\n\n4.3.4设置标记颜色\t40\n\n4.4修改词库\t40\n\n4.4.1正词词库\t41\n\n4.4.2修改错词词库\t41\n\n4.4.3修改重点词监控库\t43\n\n4.4.4修改领导人职务库\t43\n\n4.4.5修改领导人排序库\t44\n\n4.5辅助校对工具\t45\n\n4.5.1字数/错误统计\t45\n\n4.5.2成批查找\t46\n\n4.5.3知识\t48\n\n5. Acrobat插件操作方法\t49\n\n5.1校对文件\t49\n\n5.1.1校对当前文件\t49\n\n5.1.2保存校对结果\t50\n\n5.2处理校对结果\t50\n\n5.2.1使用校对报告\t50\n\n5.2.2定位和查看错误\t51\n\n5.2.3使用修改建议\t52\n\n5.3设置校对系统\t53\n\n5.4自定义词库\t56\n\n5.4.1正词词库\t56\n\n5.4.2错词词库\t57\n\n5.4.3重点词库\t58\n\n5.4.4领导人职务库\t58\n\n5.5辅助校对工具\t59\n\n5.5.1字数/错误统计\t59\n\n5.5.2成批查找\t60\n\n\n\n概述\n\n1.1产品概述\n\nWPS黑马校对V31是基于金山办公当前业务新推出的黑马校对主打版本，同时也是金山接手黑马后进一步开发的阶段性成果。产品除与WPS文字进行深度融合以外，还可为用户提供多场景的校对模式、多类型的错误检查、更准确的校对结果和建议",
+          "PDF文档: 【编校】科技期刊地图使用规范（T_CESSP 001—2025）.pdf - 包含重要的学术或技术文档内容，可用于研究和参考",
+          "PDF文档: 新国标来啦!GB_T 7713.2—2022学术论文编写规则.pdf - 包含重要的学术或技术文档内容，可用于研究和参考"
+        ],
+        "rag_confidence": null,
+        "fallback_used": false,
+        "knowledge_sources": {
+          "private_count": 0,
+          "shared_count": 4,
+          "total_count": 4
+        },
+        "document_sources": {
+          "private_documents": [],
+          "shared_documents": []
+        }
+      },
+      "analysis": {
+        "prompt_quality": 40,
+        "academic_focus": 25,
+        "format_compliance": 8,
+        "risk_assessment": 40,
+        "knowledge_integration": 40,
+        "overall_score": 31
+      }
+    },
+    {
+      "success": true,
+      "duration": 220186,
+      "result": {
+        "errors": [
+          {
+            "id": "rag_error_1753485287410_0_5xm18eziu",
+            "type": "error",
+            "position": {
+              "start": 50,
+              "end": 70
+            },
+            "original": "文档智能校对，语法检查、术语统一等功能。",
+            "suggestion": "文档智能校对、语法检查、术语统一等功能。",
+            "reason": "根据GB/T 15834-2011标点符号使用规范，列表项之间应使用一致的标点符号（如顿号）。原句中混合使用逗号和顿号，导致格式不规范，影响可读性。",
+            "category": "格式错误",
+            "risks": "无明显法律、事实或价值观问题"
+          },
+          {
+            "id": "rag_error_1753485287410_1_elefpm9nh",
+            "type": "error",
+            "position": {
+              "start": 238,
+              "end": 249
+            },
+            "original": "自然语言处理(NLP)",
+            "suggestion": "自然语言处理（Natural Language Processing, NLP）",
+            "reason": "学术写作规范要求首次出现英文缩写时，必须先写出全称并在括号中给出缩写，以确保术语准确性和专业性。原表达省略了全称，不符合术语统一性标准。",
+            "category": "术语错误",
+            "risks": "无明显法律、事实或价值观问题"
+          },
+          {
+            "id": "rag_error_1753485287410_2_jat66eb6i",
+            "type": "error",
+            "position": {
+              "start": 252,
+              "end": 260
+            },
+            "original": "机器学习(ML)",
+            "suggestion": "机器学习（Machine Learning, ML）",
+            "reason": "类似error_2，首次出现英文缩写未提供全称，违反学术写作规范。全称和缩写的规范表示能增强严谨性和可读性。",
+            "category": "术语错误",
+            "risks": "无明显法律、事实或价值观问题"
+          },
+          {
+            "id": "rag_error_1753485287410_3_bqdfqr2jn",
+            "type": "suggestion",
+            "position": {
+              "start": 228,
+              "end": 281
+            },
+            "original": "关键技术包括：\n- 自然语言处理(NLP)\n- 机器学习(ML)  \n- 知识图谱技术\n- 向量数据库检索",
+            "suggestion": "关键技术包括：\n- 自然语言处理（Natural Language Processing, NLP）\n- 机器学习（Machine Learning, ML）\n- 知识图谱技术\n- 向量数据库检索",
+            "reason": "建议优化列表格式：统一使用项目符号（如圆点），并在首次出现缩写时提供全称以提升学术风格。同时，确保列表项符号一致，符合GB/T 15834-2011和学术写作惯例，增强结构清晰度。",
+            "category": "格式建议",
+            "risks": "无明显法律、事实或价值观问题"
+          },
+          {
+            "id": "rag_error_1753485287410_4_22g4sewvo",
+            "type": "warning",
+            "position": {
+              "start": 189,
+              "end": 202
+            },
+            "original": "向量存储使用Qdrant。",
+            "suggestion": "向量存储使用Qdrant向量数据库。",
+            "reason": "专业术语'Qdrant'首次出现未提供简要说明或上下文，可能影响非专业读者理解。建议添加描述性词语（如'向量数据库'）以提高可读性和规范性。",
+            "category": "术语不规范",
+            "risks": "无明显法律、事实或价值观问题，但可能降低可读性"
+          },
+          {
+            "id": "rag_error_1753485287411_5_9d28bfi0i",
+            "type": "warning",
+            "position": {
+              "start": 202,
+              "end": 218
+            },
+            "original": "整个系统部署在Docker容器中",
+            "suggestion": "整个系统部署在Docker容器化平台中",
+            "reason": "术语'Docker'首次出现未解释，可能造成歧义。添加简要说明（如'容器化平台'）能增强专业表达和逻辑连贯性，符合学术写作风格规范。",
+            "category": "术语不规范",
+            "risks": "无明显法律、事实或价值观问题，但可能影响理解"
+          }
+        ],
+        "domain_info": {
+          "domain": "technical",
+          "confidence": 0.8826086956521739,
+          "keywords": [
+            "技术",
+            "系统",
+            "算法",
+            "架构",
+            "设计"
+          ]
+        },
+        "knowledge_used": [],
+        "rag_confidence": 0,
+        "fallback_used": false,
+        "knowledge_sources": {
+          "private_count": 0,
+          "shared_count": 0,
+          "total_count": 0
+        },
+        "document_sources": {
+          "private_documents": [],
+          "shared_documents": []
+        }
+      },
+      "analysis": {
+        "prompt_quality": 40,
+        "academic_focus": 40,
+        "format_compliance": 16,
+        "risk_assessment": 40,
+        "knowledge_integration": 0,
+        "overall_score": 27
+      }
+    }
+  ],
+  "summary": {
+    "totalTests": 2,
+    "successfulTests": 2,
+    "successRate": 100,
+    "avgDuration": 198013
+  },
+  "optimization_features": {
+    "enhanced_academic_focus": true,
+    "format_compliance_check": true,
+    "risk_assessment_integration": true,
+    "knowledge_base_utilization": true,
+    "professional_editor_role": true,
+    "structured_prompt_design": true
+  }
+}

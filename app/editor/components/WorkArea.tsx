@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import RAGEnhancedEditor from './RAGEnhancedEditor';
 import UploadArea from './UploadArea';
-import LoginForm from '../../components/auth/LoginForm';
-import RegisterForm from '../../components/auth/RegisterForm';
 
 interface KnowledgeItem {
   id: string;
@@ -96,13 +94,13 @@ export default function WorkArea({
   const handleLoginSuccess = (userData: any) => {
     setUser(userData);
     setIsLoggedIn(true);
-    showToast('登录成功', 'success');
+    showToast('success', '登录成功');
   };
 
   // 注册成功处理
   const handleRegisterSuccess = () => {
     setAuthTab('login');
-    showToast('注册成功，请登录', 'success');
+    showToast('success', '注册成功，请登录');
   };
 
   // 退出登录
@@ -125,7 +123,7 @@ export default function WorkArea({
       localStorage.removeItem('user_info');
       setUser(null);
       setIsLoggedIn(false);
-      showToast('已退出登录', 'info');
+      showToast('info', '已退出登录');
     }
   };
   
@@ -1263,44 +1261,37 @@ export default function WorkArea({
           <div className="flex items-center justify-center h-full p-6">
             <div className="w-full max-w-4xl mx-auto">
               {!isLoggedIn ? (
-                <div className="bg-white rounded-lg shadow-lg">
-                  <div className="border-b border-gray-200">
-                    <nav className="-mb-px flex">
+                <div className="bg-white rounded-lg shadow-lg p-8">
+                  <div className="text-center">
+                    <div className="text-gray-400 mb-6">
+                      <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-4">用户认证功能</h3>
+                    <p className="text-gray-500 mb-6">
+                      用户认证系统暂时不可用。您仍然可以使用所有编辑功能。
+                    </p>
+                    <div className="space-y-3">
                       <button
-                        onClick={() => setAuthTab('login')}
-                        className={`py-3 px-6 border-b-2 font-medium text-sm ${
-                          authTab === 'login'
-                            ? 'border-blue-500 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
+                        onClick={() => setActiveSubMenu('upload')}
+                        className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                       >
-                        登录
+                        开始上传文档
                       </button>
                       <button
-                        onClick={() => setAuthTab('register')}
-                        className={`py-3 px-6 border-b-2 font-medium text-sm ${
-                          authTab === 'register'
-                            ? 'border-blue-500 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
+                        onClick={() => setActiveSubMenu('rag-editor')}
+                        className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                       >
-                        注册
+                        使用AI编辑器
                       </button>
-                    </nav>
-                  </div>
-
-                  <div className="p-6">
-                    {authTab === 'login' ? (
-                      <LoginForm 
-                        onSuccess={handleLoginSuccess} 
-                        className="max-w-md mx-auto"
-                      />
-                    ) : (
-                      <RegisterForm 
-                        onSuccess={handleRegisterSuccess}
-                        className="max-w-2xl mx-auto"
-                      />
-                    )}
+                      <button
+                        onClick={() => setActiveSubMenu('shared')}
+                        className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        访问知识库
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (

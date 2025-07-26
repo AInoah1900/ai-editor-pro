@@ -1,0 +1,96 @@
+{
+  "timestamp": "2025-07-25T09:00:09.047Z",
+  "testContent": "智能编辑系统测试文档\n\n本系统主要功能包括：文档校对，语法检查、术语统一等。系统采用了先进的技术，能够自动识别错误。\n\n关键技术包括：\n- 自然语言处理(NLP)\n- 机器学习(ML)  \n- 知识图谱技术",
+  "apiResponse": {
+    "errors": [
+      {
+        "id": "rag_error_1753434009039_0_mjisl4kcu",
+        "type": "error",
+        "position": {
+          "start": 22,
+          "end": 38
+        },
+        "original": "文档校对，语法检查、术语统一等。",
+        "suggestion": "文档校对、语法检查、术语统一等。",
+        "reason": "根据GB/T 15834-2011《标点符号用法》第4.3.3条，列举项应使用一致的标点符号。原句中逗号（，）和顿号（、）混合使用，导致格式不规范，建议统一改为顿号以保持一致性。",
+        "category": "格式规范"
+      },
+      {
+        "id": "rag_error_1753434009039_1_a2h8dhey7",
+        "type": "error",
+        "position": {
+          "start": 84,
+          "end": 94
+        },
+        "original": "机器学习(ML)  ",
+        "suggestion": "机器学习(ML)",
+        "reason": "文本中存在多余空格，不符合GB/T 15835-2011《数字用法》及一般排版规范（如期刊格式要求），多余空格可能影响可读性和美观，应删除以标准化。",
+        "category": "格式规范"
+      },
+      {
+        "id": "rag_error_1753434009039_2_m71q33w3o",
+        "type": "suggestion",
+        "position": {
+          "start": 60,
+          "end": 103
+        },
+        "original": "关键技术包括：\n- 自然语言处理(NLP)\n- 机器学习(ML)  \n- 知识图谱技术",
+        "suggestion": "建议在正文首次提到这些技术时定义全称和缩写，例如：'关键技术包括自然语言处理（NLP）、机器学习（ML）和知识图谱技术'。",
+        "reason": "基于《科技期刊编排规则》和学术写作规范，英文缩写（如NLP、ML）首次出现时应给出全称以确保可读性和规范性，避免读者混淆。",
+        "category": "术语与风格"
+      },
+      {
+        "id": "rag_error_1753434009039_3_u83wj1efu",
+        "type": "suggestion",
+        "position": {
+          "start": 38,
+          "end": 58
+        },
+        "original": "系统采用了先进的技术，能够自动识别错误。",
+        "suggestion": "系统采用了先进的技术，能够自动识别并纠正错误。",
+        "reason": "为提升学术严谨性和表达完整性，建议扩展'识别错误'为'识别并纠正错误'，以更准确地描述系统功能，符合学术写作风格要求。",
+        "category": "语言表达"
+      },
+      {
+        "id": "rag_error_1753434009039_4_409b4v1ov",
+        "type": "suggestion",
+        "position": {
+          "start": 0,
+          "end": 10
+        },
+        "original": "智能编辑系统测试文档",
+        "suggestion": "智能编辑系统的功能与技术概述",
+        "reason": "学术稿件标题应更正式和描述性，以反映内容核心。建议优化标题为更具学术性和概括性的表述，符合期刊标题规范。",
+        "category": "语言表达"
+      }
+    ],
+    "domain_info": {
+      "domain": "technical",
+      "confidence": 0.975,
+      "keywords": [
+        "技术",
+        "系统",
+        "测试"
+      ]
+    },
+    "knowledge_used": [],
+    "rag_confidence": 0,
+    "fallback_used": false,
+    "knowledge_sources": {
+      "private_count": 0,
+      "shared_count": 0,
+      "total_count": 0
+    },
+    "document_sources": {
+      "private_documents": [],
+      "shared_documents": []
+    }
+  },
+  "analysis": {
+    "duration": 145517,
+    "errorCount": 5,
+    "hasRisksField": 0,
+    "fallbackUsed": false,
+    "riskFieldCoverage": 0
+  }
+}
