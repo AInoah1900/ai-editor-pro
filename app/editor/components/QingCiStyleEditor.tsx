@@ -1,46 +1,48 @@
 'use client';
 
-import * as React from 'react';
-import { useState, useEffect, useRef, useCallback } from 'react';
-
-interface ErrorItem {
-  id: string;
-  type: 'error' | 'warning' | 'suggestion';
-  category: string;
-  original: string;
-  suggestion: string;
-  reason: string;
-  position: {
-    start: number;
-    end: number;
-  };
-}
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 interface QingCiStyleEditorProps {
   content: string;
-  errors: ErrorItem[];
-  onContentChange?: (content: string) => void;
+  errors?: ErrorItem[];
+  onContentChange: (content: string) => void;
   onClearText?: () => void;
   onClearFormat?: () => void;
   onImportDocument?: () => void;
   onDownloadDocument?: () => void;
   documentStats?: {
-    characters: number;
-    paragraphs: number;
-    words: number;
+    originalLength: number;
+    currentLength: number;
+    charactersProcessed: number;
   };
 }
 
-interface FormatState {
-  bold: boolean;
-  italic: boolean;
-  underline: boolean;
-  strikethrough: boolean;
-  color: string;
-  backgroundColor: string;
-  fontSize: string;
-  fontFamily: string;
-  alignment: string;
+interface ErrorItem {
+  id: string;
+  type: 'error' | 'warning' | 'suggestion';
+  position: { start: number; end: number };
+  original: string;
+  suggestion: string;
+  reason: string;
+  category: string;
+}
+
+// 新增：弹窗状态接口
+interface ErrorPopupState {
+  errorId: string | null;
+  position: { x: number; y: number };
+  isVisible: boolean;
+  error: ErrorItem | null;
+}
+
+// 新增：处理后内容状态接口
+interface ProcessedContent {
+  id: string;
+  position: { start: number; end: number };
+  original: string;
+  processed: string;
+  action: 'replaced' | 'edited' | 'ignored';
+  timestamp: Date;
 }
 
 export default function QingCiStyleEditor({ 
@@ -54,119 +56,215 @@ export default function QingCiStyleEditor({
   documentStats
 }: QingCiStyleEditorProps) {
   const [documentContent, setDocumentContent] = useState(content);
-  const [selectedText, setSelectedText] = useState('');
-  const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [showBgColorPicker, setShowBgColorPicker] = useState(false);
-
-  
-  const editorRef = useRef<HTMLDivElement>(null);
-  const colorPickerRef = useRef<HTMLDivElement>(null);
-  const bgColorPickerRef = useRef<HTMLDivElement>(null);
-
-  const [formatState, setFormatState] = useState<FormatState>({
+  const [formatState, setFormatState] = useState({
     bold: false,
     italic: false,
     underline: false,
     strikethrough: false,
     color: '#000000',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#FFFFFF',
     fontSize: '14px',
-    fontFamily: '宋体',
+    fontFamily: 'Arial',
     alignment: 'left'
   });
 
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showBgColorPicker, setShowBgColorPicker] = useState(false);
+  const [selectedText, setSelectedText] = useState('');
+  
+  // 新增状态：错误弹窗
+  const [errorPopup, setErrorPopup] = useState<ErrorPopupState>({
+    errorId: null,
+    position: { x: 0, y: 0 },
+    isVisible: false,
+    error: null
+  });
 
+  // 新增状态：处理后内容记录
+  const [processedContents, setProcessedContents] = useState<ProcessedContent[]>([]);
 
-  // 将纯文本转换为HTML格式，保持原始格式
-  const convertTextToHTML = useCallback((text: string) => {
-    if (!text) return '';
-    
-    // 1. 转义HTML特殊字符
-    let html = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-    
-    // 2. 处理连续空格
-    html = html.replace(/  +/g, (match) => {
-      return '&nbsp;'.repeat(match.length);
-    });
-    
-    // 3. 处理换行符：将 \n 转换为 <br> 标签
-    html = html.replace(/\n/g, '<br>');
-    
-    return html;
-  }, []);
+  // 新增状态：编辑模式
+  const [editingError, setEditingError] = useState<{
+    errorId: string;
+    content: string;
+  } | null>(null);
 
-  // 更新文档内容
-  const handleContentChange = (newContent: string) => {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
+  const bgColorPickerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  // 同步内容变化
+  useEffect(() => {
+    setDocumentContent(content);
+  }, [content]);
+
+  // 处理内容变化
+  const handleContentChange = useCallback((newContent: string) => {
     setDocumentContent(newContent);
-    onContentChange?.(newContent);
-  };
+    onContentChange(newContent);
+  }, [onContentChange]);
 
   // 处理文本选择
   const handleTextSelection = () => {
     const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0 && editorRef.current?.contains(selection.anchorNode)) {
-      const range = selection.getRangeAt(0);
-      const text = selection.toString();
-      setSelectedText(text);
-      
-      if (text.length > 0) {
-        const editorText = editorRef.current?.textContent || '';
-        const start = editorText.indexOf(text);
-        const end = start + text.length;
-        setSelectionRange({ start, end });
-      } else {
-        setSelectionRange(null);
-      }
+    if (selection && selection.toString()) {
+      setSelectedText(selection.toString());
     }
   };
 
-  // 应用格式化
+  // 应用格式
   const applyFormat = (command: string, value?: string) => {
     document.execCommand(command, false, value);
     
     // 更新格式状态
-    switch (command) {
-      case 'bold':
-        setFormatState(prev => ({ ...prev, bold: !prev.bold }));
-        break;
-      case 'italic':
-        setFormatState(prev => ({ ...prev, italic: !prev.italic }));
-        break;
-      case 'underline':
-        setFormatState(prev => ({ ...prev, underline: !prev.underline }));
-        break;
-      case 'strikeThrough':
-        setFormatState(prev => ({ ...prev, strikethrough: !prev.strikethrough }));
-        break;
-      case 'foreColor':
-        setFormatState(prev => ({ ...prev, color: value || '#000000' }));
-        setShowColorPicker(false);
-        break;
-      case 'backColor':
-        setFormatState(prev => ({ ...prev, backgroundColor: value || '#ffffff' }));
-        setShowBgColorPicker(false);
-        break;
-      case 'fontSize':
-        setFormatState(prev => ({ ...prev, fontSize: value || '14px' }));
-        break;
-      case 'fontName':
-        setFormatState(prev => ({ ...prev, fontFamily: value || '宋体' }));
-        break;
-      case 'justifyLeft':
-      case 'justifyCenter':
-      case 'justifyRight':
-      case 'justifyFull':
-        const alignment = command.replace('justify', '').toLowerCase();
-        setFormatState(prev => ({ ...prev, alignment }));
-        break;
-    }
+    setTimeout(() => {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const element = range.commonAncestorContainer.parentElement;
+        
+        if (element) {
+          setFormatState(prev => ({
+            ...prev,
+            bold: document.queryCommandState('bold'),
+            italic: document.queryCommandState('italic'),
+            underline: document.queryCommandState('underline'),
+            strikethrough: document.queryCommandState('strikeThrough')
+          }));
+        }
+      }
+    }, 10);
   };
+
+  // 文本转HTML（保持换行）
+  const convertTextToHTML = (text: string): string => {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;')
+      .replace(/\n/g, '<br>');
+  };
+
+  // 新增：显示错误弹窗
+  const showErrorPopup = useCallback((errorId: string, event: React.MouseEvent) => {
+    const error = errors.find(e => e.id === errorId);
+    if (!error) return;
+
+    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    setErrorPopup({
+      errorId,
+      position: {
+        x: rect.left + rect.width / 2,
+        y: rect.top
+      },
+      isVisible: true,
+      error
+    });
+  }, [errors]);
+
+  // 新增：隐藏错误弹窗
+  const hideErrorPopup = useCallback(() => {
+    setErrorPopup({
+      errorId: null,
+      position: { x: 0, y: 0 },
+      isVisible: false,
+      error: null
+    });
+    setEditingError(null);
+  }, []);
+
+  // 新增：替换功能
+  const handleReplace = useCallback((errorId: string) => {
+    const error = errors.find(e => e.id === errorId);
+    if (!error) return;
+
+    const newContent = documentContent.substring(0, error.position.start) +
+                      error.suggestion +
+                      documentContent.substring(error.position.end);
+    
+    // 记录处理后的内容
+    const processedContent: ProcessedContent = {
+      id: errorId,
+      position: error.position,
+      original: error.original,
+      processed: error.suggestion,
+      action: 'replaced',
+      timestamp: new Date()
+    };
+
+    setProcessedContents(prev => [...prev, processedContent]);
+    handleContentChange(newContent);
+    hideErrorPopup();
+  }, [documentContent, errors, handleContentChange, hideErrorPopup]);
+
+  // 新增：编辑功能
+  const handleEdit = useCallback((errorId: string) => {
+    const error = errors.find(e => e.id === errorId);
+    if (!error) return;
+
+    setEditingError({
+      errorId,
+      content: error.original
+    });
+  }, [errors]);
+
+  // 新增：保存编辑
+  const handleSaveEdit = useCallback(() => {
+    if (!editingError) return;
+
+    const error = errors.find(e => e.id === editingError.errorId);
+    if (!error) return;
+
+    const newContent = documentContent.substring(0, error.position.start) +
+                      editingError.content +
+                      documentContent.substring(error.position.end);
+    
+    // 记录处理后的内容
+    const processedContent: ProcessedContent = {
+      id: editingError.errorId,
+      position: error.position,
+      original: error.original,
+      processed: editingError.content,
+      action: 'edited',
+      timestamp: new Date()
+    };
+
+    setProcessedContents(prev => [...prev, processedContent]);
+    handleContentChange(newContent);
+    hideErrorPopup();
+  }, [editingError, errors, documentContent, handleContentChange, hideErrorPopup]);
+
+  // 新增：忽略功能
+  const handleIgnore = useCallback((errorId: string) => {
+    const error = errors.find(e => e.id === errorId);
+    if (!error) return;
+
+    // 记录处理后的内容
+    const processedContent: ProcessedContent = {
+      id: errorId,
+      position: error.position,
+      original: error.original,
+      processed: error.original,
+      action: 'ignored',
+      timestamp: new Date()
+    };
+
+    setProcessedContents(prev => [...prev, processedContent]);
+    hideErrorPopup();
+  }, [errors, hideErrorPopup]);
+
+  // 检查内容是否已被处理
+  const isContentProcessed = useCallback((errorId: string) => {
+    return processedContents.some(pc => pc.id === errorId);
+  }, [processedContents]);
+
+  // 获取处理后的内容
+  const getProcessedContent = useCallback((errorId: string) => {
+    return processedContents.find(pc => pc.id === errorId);
+  }, [processedContents]);
 
   // 渲染带错误标注的文档内容
   const renderDocumentWithAnnotations = () => {
@@ -179,12 +277,33 @@ export default function QingCiStyleEditor({
       return htmlContent;
     }
 
-    // 如果有错误，需要在HTML内容中插入错误标注
-    // 但这需要重新计算位置，因为HTML转换会改变字符位置
-    // 为了简化，我们先使用原始文本进行错误标注，然后转换
+    // 过滤掉已处理的错误
+    const activeErrors = errors.filter(error => !isContentProcessed(error.id));
     
+    if (activeErrors.length === 0) {
+      // 如果所有错误都已处理，添加处理后的标记
+      let result = documentContent;
+      const sortedProcessed = [...processedContents].sort((a, b) => b.position.start - a.position.start);
+      
+      sortedProcessed.forEach((processed) => {
+        const beforeText = result.substring(0, processed.position.start);
+        const afterText = result.substring(processed.position.end);
+        
+        // 根据处理动作选择颜色
+        const colorClass = processed.action === 'replaced' ? 'text-red-600' :
+                          processed.action === 'edited' ? 'text-yellow-600' :
+                          'text-green-600';
+        
+        const processedText = `<span class="${colorClass} font-medium" title="已${processed.action === 'replaced' ? '替换' : processed.action === 'edited' ? '编辑' : '忽略'}: ${processed.original} → ${processed.processed}">${processed.processed}</span>`;
+        
+        result = beforeText + processedText + afterText;
+      });
+      
+      return convertTextToHTML(result);
+    }
+
     // 按位置排序错误
-    const sortedErrors = [...errors].sort((a, b) => a.position.start - b.position.start);
+    const sortedErrors = [...activeErrors].sort((a, b) => a.position.start - b.position.start);
     
     let result = '';
     let lastIndex = 0;
@@ -194,13 +313,13 @@ export default function QingCiStyleEditor({
       const beforeText = documentContent.slice(lastIndex, error.position.start);
       result += convertTextToHTML(beforeText);
       
-      // 添加带标注的错误文本
-      const errorClass = error.type === 'error' ? 'error-annotation' : 
-                        error.type === 'warning' ? 'warning-annotation' : 
-                        'suggestion-annotation';
+      // 添加带标注的错误文本 - 使用精确的下划线样式
+      const underlineClass = error.type === 'error' ? 'error-underline' : 
+                            error.type === 'warning' ? 'warning-underline' : 
+                            'suggestion-underline';
       
       const errorText = convertTextToHTML(error.original);
-      result += `<span class="${errorClass}" title="${error.reason}: ${error.suggestion}" data-error-id="${error.id}">${errorText}</span>`;
+      result += `<span class="${underlineClass}" data-error-id="${error.id}" style="cursor: pointer; position: relative;">${errorText}</span>`;
       
       lastIndex = error.position.end;
     });
@@ -212,6 +331,52 @@ export default function QingCiStyleEditor({
     return result;
   };
 
+  // 处理编辑器鼠标悬停事件
+  const handleEditorMouseOver = useCallback((event: React.MouseEvent) => {
+    const target = event.target as HTMLElement;
+    const errorSpan = target.closest('[data-error-id]');
+    
+    if (errorSpan) {
+      const errorId = errorSpan.getAttribute('data-error-id');
+      if (errorId && errorId !== errorPopup.errorId) {
+        showErrorPopup(errorId, event);
+      }
+    }
+  }, [showErrorPopup, errorPopup.errorId]);
+
+  // 处理编辑器鼠标离开事件
+  const handleEditorMouseLeave = useCallback((event: React.MouseEvent) => {
+    const target = event.target as HTMLElement;
+    const errorSpan = target.closest('[data-error-id]');
+    
+    if (!errorSpan) {
+      // 延迟隐藏，给用户时间移动到弹窗
+      setTimeout(() => {
+        if (!popupRef.current?.matches(':hover')) {
+          hideErrorPopup();
+        }
+      }, 100);
+    }
+  }, [hideErrorPopup]);
+
+  // 处理弹窗鼠标事件
+  const handlePopupMouseEnter = useCallback(() => {
+    // 鼠标进入弹窗时，确保弹窗保持显示
+  }, []);
+
+  const handlePopupMouseLeave = useCallback(() => {
+    // 鼠标离开弹窗时，延迟隐藏
+    setTimeout(() => {
+      const editor = editorRef.current;
+      const hoveredElement = document.querySelector(':hover');
+      
+      // 如果鼠标不在错误标记上，则隐藏弹窗
+      if (!hoveredElement?.closest('[data-error-id]')) {
+        hideErrorPopup();
+      }
+    }, 100);
+  }, [hideErrorPopup]);
+
   // 颜色选择器
   const ColorPicker = ({ 
     colors, 
@@ -219,63 +384,29 @@ export default function QingCiStyleEditor({
     isVisible, 
     onClose 
   }: { 
-    colors: string[], 
-    onSelect: (color: string) => void,
-    isVisible: boolean,
-    onClose: () => void
+    colors: string[]; 
+    onSelect: (color: string) => void; 
+    isVisible: boolean; 
+    onClose: () => void; 
   }) => {
     if (!isVisible) return null;
 
     return (
-      <div className="absolute top-full left-0 mt-1 p-2 bg-white border border-gray-300 rounded-lg shadow-lg z-50">
-        <div className="grid grid-cols-8 gap-1 mb-2">
-          {colors.map(color => (
-            <button
-              key={color}
-              className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
-              style={{ backgroundColor: color }}
-              onClick={() => onSelect(color)}
-              title={color}
-            />
-          ))}
-        </div>
-        <button
-          onClick={onClose}
-          className="w-full text-xs text-gray-500 hover:text-gray-700 py-1"
-        >
-          关闭
-        </button>
+      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 z-10 grid grid-cols-6 gap-1">
+        {colors.map((color) => (
+          <button
+            key={color}
+            className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+            style={{ backgroundColor: color }}
+            onClick={() => {
+              onSelect(color);
+              onClose();
+            }}
+          />
+        ))}
       </div>
     );
   };
-
-
-
-  // 监听内容变化
-  useEffect(() => {
-    setDocumentContent(content);
-    
-    // 当文档内容变化时，更新编辑器的HTML内容
-    if (editorRef.current && content) {
-      const htmlContent = convertTextToHTML(content);
-      editorRef.current.innerHTML = htmlContent;
-    }
-  }, [content, convertTextToHTML]);
-
-  // 点击外部关闭颜色选择器
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (colorPickerRef.current && !colorPickerRef.current.contains(event.target as Node)) {
-        setShowColorPicker(false);
-      }
-      if (bgColorPickerRef.current && !bgColorPickerRef.current.contains(event.target as Node)) {
-        setShowBgColorPicker(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const commonColors = [
     '#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF', '#FF0000', '#00FF00',
@@ -285,26 +416,23 @@ export default function QingCiStyleEditor({
 
   return (
     <div className="h-full flex flex-col bg-white" data-testid="qingci-style-editor">
-      <style jsx>{`
-        .error-annotation {
-          background-color: #fef2f2;
-          border-bottom: 2px solid #ef4444;
-          cursor: pointer;
+      <style jsx global>{`
+        .error-underline {
+          border-bottom: 2px solid #ef4444 !important;
+          text-decoration: none !important;
         }
-        .warning-annotation {
-          background-color: #fffbeb;
-          border-bottom: 2px solid #f59e0b;
-          cursor: pointer;
+        .warning-underline {
+          border-bottom: 2px solid #f59e0b !important;
+          text-decoration: none !important;
         }
-        .suggestion-annotation {
-          background-color: #f0fdf4;
-          border-bottom: 2px solid #10b981;
-          cursor: pointer;
+        .suggestion-underline {
+          border-bottom: 2px solid #10b981 !important;
+          text-decoration: none !important;
         }
-        .error-annotation:hover,
-        .warning-annotation:hover,
-        .suggestion-annotation:hover {
-          opacity: 0.8;
+        .error-underline:hover,
+        .warning-underline:hover,
+        .suggestion-underline:hover {
+          background-color: rgba(0, 0, 0, 0.05) !important;
         }
       `}</style>
 
@@ -319,18 +447,17 @@ export default function QingCiStyleEditor({
               value={formatState.fontFamily}
               title="字体"
             >
-              <option value="宋体">宋体</option>
-              <option value="微软雅黑">微软雅黑</option>
-              <option value="楷体">楷体</option>
-              <option value="黑体">黑体</option>
-              <option value="Arial">Arial</option>
-              <option value="Times New Roman">Times New Roman</option>
+              <option value="Arial">宋体</option>
+              <option value="SimHei">黑体</option>
+              <option value="KaiTi">楷体</option>
+              <option value="FangSong">仿宋</option>
+              <option value="Microsoft YaHei">微软雅黑</option>
             </select>
           </div>
 
           <div className="w-px h-6 bg-gray-300"></div>
 
-          {/* 格式化按钮 */}
+          {/* 格式按钮组 */}
           <div className="flex items-center space-x-1">
             <button
               onClick={() => applyFormat('bold')}
@@ -502,8 +629,6 @@ export default function QingCiStyleEditor({
               </svg>
             </button>
           </div>
-
-
         </div>
       </div>
 
@@ -526,11 +651,133 @@ export default function QingCiStyleEditor({
           }}
           onMouseUp={handleTextSelection}
           onKeyUp={handleTextSelection}
+          onMouseOver={handleEditorMouseOver}
+          onMouseLeave={handleEditorMouseLeave}
           dangerouslySetInnerHTML={{ __html: renderDocumentWithAnnotations() }}
         />
       </div>
 
-
+      {/* 错误弹窗 */}
+      {errorPopup.isVisible && errorPopup.error && (
+        <div
+          ref={popupRef}
+          className="fixed z-50 bg-white border border-gray-300 rounded-lg shadow-xl p-4 min-w-80 max-w-96"
+          style={{
+            left: Math.max(10, Math.min(errorPopup.position.x - 160, window.innerWidth - 400)),
+            top: Math.max(10, errorPopup.position.y - 10),
+            transform: 'translateY(-100%)'
+          }}
+          onMouseEnter={handlePopupMouseEnter}
+          onMouseLeave={handlePopupMouseLeave}
+        >
+          {/* 弹窗箭头 */}
+          <div 
+            className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full"
+            style={{ 
+              width: 0, 
+              height: 0, 
+              borderLeft: '8px solid transparent',
+              borderRight: '8px solid transparent',
+              borderTop: '8px solid white'
+            }}
+          ></div>
+          
+          {/* 错误信息 */}
+          <div className="mb-4">
+            <div className="flex items-center mb-2">
+              <span className={`inline-block w-3 h-3 rounded-full mr-2 ${
+                errorPopup.error.type === 'error' ? 'bg-red-500' :
+                errorPopup.error.type === 'warning' ? 'bg-yellow-500' :
+                'bg-green-500'
+              }`}></span>
+              <span className="font-medium text-gray-900">
+                {errorPopup.error.type === 'error' ? '确定错误' :
+                 errorPopup.error.type === 'warning' ? '疑似错误' :
+                 '优化建议'}
+              </span>
+            </div>
+            
+            {editingError && editingError.errorId === errorPopup.error.id ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">编辑内容：</label>
+                  <input
+                    type="text"
+                    value={editingError.content}
+                    onChange={(e) => setEditingError(prev => prev ? {...prev, content: e.target.value} : null)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={handleSaveEdit}
+                    className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
+                  >
+                    保存
+                  </button>
+                  <button
+                    onClick={() => setEditingError(null)}
+                    className="flex-1 bg-gray-300 text-gray-700 px-3 py-2 rounded-md text-sm hover:bg-gray-400 transition-colors"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="bg-gray-50 p-3 rounded-md">
+                  <div className="text-sm">
+                    <span className="text-red-600 line-through">{errorPopup.error.original}</span>
+                    <span className="mx-2">→</span>
+                    <span className="text-green-600 font-medium">{errorPopup.error.suggestion}</span>
+                  </div>
+                </div>
+                
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleReplace(errorPopup.error!.id)}
+                    className="flex-1 bg-green-600 text-white px-3 py-2 rounded-md text-sm hover:bg-green-700 transition-colors flex items-center justify-center space-x-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    <span>替换</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => handleEdit(errorPopup.error!.id)}
+                    className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors flex items-center justify-center space-x-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    <span>编辑</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => handleIgnore(errorPopup.error!.id)}
+                    className="flex-1 bg-yellow-600 text-white px-3 py-2 rounded-md text-sm hover:bg-yellow-700 transition-colors flex items-center justify-center space-x-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L12 12m6.121-6.121A3 3 0 1015.121 9.879m0 0L21 3m-6.121 6.121L12 12" />
+                    </svg>
+                    <span>忽略</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* 错误详情 */}
+          <div className="border-t border-gray-200 pt-3">
+            <div className="text-xs text-gray-500 space-y-1">
+              <div><span className="font-medium">错误类型：</span>{errorPopup.error.category}</div>
+              <div><span className="font-medium">错误原因：</span>{errorPopup.error.reason}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
