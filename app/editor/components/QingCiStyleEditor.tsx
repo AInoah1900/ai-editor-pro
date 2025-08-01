@@ -7,6 +7,8 @@ interface QingCiStyleEditorProps {
   errors?: ErrorItem[];
   onContentChange: (content: string) => void;
   onUserOperation?: () => void;
+  onAddCorrectionRecord?: (record: CorrectionRecord) => void;
+  onScrollToError?: (errorId: string) => void;
   onClearText?: () => void;
   onClearFormat?: () => void;
   onImportDocument?: () => void;
@@ -46,11 +48,20 @@ interface ProcessedContent {
   timestamp: Date;
 }
 
+interface CorrectionRecord {
+  id: string;
+  original: string;
+  corrected: string;
+  timestamp: Date;
+}
+
 export default function QingCiStyleEditor({ 
   content, 
   errors = [], 
   onContentChange,
   onUserOperation,
+  onAddCorrectionRecord,
+  onScrollToError,
   onClearText,
   onClearFormat,
   onImportDocument,
@@ -58,6 +69,16 @@ export default function QingCiStyleEditor({
   documentStats
 }: QingCiStyleEditorProps) {
   const [documentContent, setDocumentContent] = useState(content);
+  
+  // 添加调试日志
+  console.log('🔍 QingCiStyleEditor 初始化/重新渲染:', {
+    timestamp: new Date().toISOString(),
+    propContent: content?.length || 0,
+    propContentPreview: content?.substring(0, 100) || 'empty',
+    documentContentLength: documentContent?.length || 0,
+    documentContentPreview: documentContent?.substring(0, 100) || 'empty',
+    errorsCount: errors.length
+  });
   const [formatState, setFormatState] = useState({
     bold: false,
     italic: false,
@@ -98,14 +119,63 @@ export default function QingCiStyleEditor({
 
   // 同步内容变化
   useEffect(() => {
-    setDocumentContent(content);
+    console.log('🔍 QingCiStyleEditor useEffect 触发:', {
+      timestamp: new Date().toISOString(),
+      propContent: content?.length || 0,
+      documentContent: documentContent?.length || 0,
+      contentChanged: content !== documentContent,
+      hasEditorRef: !!editorRef.current
+    });
+    
+    if (content !== documentContent) {
+      setDocumentContent(content);
+    }
   }, [content]);
+  
+  // 单独的useEffect处理内容渲染，确保documentContent已更新
+  useEffect(() => {
+    if (editorRef.current && documentContent) {
+      console.log('🎯 QingCiStyleEditor 渲染内容:', {
+        timestamp: new Date().toISOString(),
+        documentContentLength: documentContent.length,
+        documentContentPreview: documentContent.substring(0, 100),
+        errorsCount: errors.length
+      });
+      
+      const renderedContent = renderDocumentWithAnnotations();
+      console.log('🎯 设置编辑器innerHTML:', {
+        renderedContentLength: renderedContent.length,
+        renderedContentPreview: renderedContent.substring(0, 100)
+      });
+      editorRef.current.innerHTML = renderedContent;
+    }
+  }, [documentContent, errors]);
 
   // 处理内容变化
   const handleContentChange = useCallback((newContent: string) => {
-    setDocumentContent(newContent);
-    onContentChange(newContent);
-  }, [onContentChange]);
+    console.log('🔍 QingCiStyleEditor handleContentChange:', {
+      timestamp: new Date().toISOString(),
+      newContentLength: newContent.length,
+      newContentPreview: newContent.substring(0, 100)
+    });
+    
+    // 保留HTML格式，不要移除标签
+    // 只在必要时提取纯文本（比如传递给父组件时）
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = newContent;
+    const plainText = tempDiv.textContent || tempDiv.innerText || '';
+    
+    // 更新本地状态时保留HTML格式
+    setDocumentContent(plainText);
+    
+    // 传递给父组件时使用纯文本
+    onContentChange(plainText);
+    
+    // 标记用户操作
+    if (onUserOperation) {
+      onUserOperation();
+    }
+  }, [onContentChange, onUserOperation]);
 
   // 处理文本选择
   const handleTextSelection = () => {
@@ -178,6 +248,145 @@ export default function QingCiStyleEditor({
     setEditingError(null);
   }, []);
 
+  // 设置全局错误点击处理函数
+  useEffect(() => {
+    (window as any).handleErrorClick = (errorId: string, event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      console.log('🎯 错误点击:', { errorId });
+      
+      const error = errors.find(e => e.id === errorId);
+      if (error && event.target) {
+        const rect = (event.target as HTMLElement).getBoundingClientRect();
+        showErrorPopup(errorId, {
+          target: event.target,
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.top
+        } as any);
+      }
+    };
+    
+    return () => {
+      delete (window as any).handleErrorClick;
+    };
+  }, [errors, showErrorPopup]);
+
+  // 错误操作：替换
+  const replaceError = useCallback((errorId: string) => {
+    const error = errors.find(e => e.id === errorId);
+    if (!error) return;
+
+    console.log('🔄 替换错误:', { errorId, original: error.original, suggestion: error.suggestion });
+
+    // 更新文档内容
+    const newContent = documentContent.replace(error.original, error.suggestion);
+    setDocumentContent(newContent);
+    onContentChange(newContent);
+
+    // 添加纠错记录
+    if (onAddCorrectionRecord) {
+      onAddCorrectionRecord({
+        id: errorId,
+        type: 'replace',
+        original: error.original,
+        corrected: error.suggestion,
+        timestamp: new Date()
+      });
+    }
+
+    // 标记为已处理
+    setProcessedContents(prev => [...prev, {
+      id: errorId,
+      original: error.original,
+      processed: error.suggestion,
+      action: 'replaced',
+      position: error.position
+    }]);
+
+    hideErrorPopup();
+  }, [errors, documentContent, onContentChange, onAddCorrectionRecord, hideErrorPopup]);
+
+  // 错误操作：编辑
+  const editError = useCallback((errorId: string) => {
+    const error = errors.find(e => e.id === errorId);
+    if (!error) return;
+
+    console.log('✏️ 编辑错误:', { errorId });
+    
+    setEditingError({
+      errorId,
+      content: error.suggestion
+    });
+  }, [errors]);
+
+  // 错误操作：忽略
+  const ignoreError = useCallback((errorId: string) => {
+    const error = errors.find(e => e.id === errorId);
+    if (!error) return;
+
+    console.log('🚫 忽略错误:', { errorId });
+
+    // 添加纠错记录
+    if (onAddCorrectionRecord) {
+      onAddCorrectionRecord({
+        id: errorId,
+        type: 'ignore',
+        original: error.original,
+        corrected: error.original,
+        timestamp: new Date()
+      });
+    }
+
+    // 标记为已处理
+    setProcessedContents(prev => [...prev, {
+      id: errorId,
+      original: error.original,
+      processed: error.original,
+      action: 'ignored',
+      position: error.position
+    }]);
+
+    hideErrorPopup();
+  }, [errors, onAddCorrectionRecord, hideErrorPopup]);
+
+  // 确认编辑
+  const confirmEdit = useCallback(() => {
+    if (!editingError) return;
+
+    const error = errors.find(e => e.id === editingError.errorId);
+    if (!error) return;
+
+    console.log('✅ 确认编辑:', { errorId: editingError.errorId, newContent: editingError.content });
+
+    // 更新文档内容
+    const newContent = documentContent.replace(error.original, editingError.content);
+    setDocumentContent(newContent);
+    onContentChange(newContent);
+
+    // 添加纠错记录
+    if (onAddCorrectionRecord) {
+      onAddCorrectionRecord({
+        id: editingError.errorId,
+        type: 'edit',
+        original: error.original,
+        corrected: editingError.content,
+        timestamp: new Date()
+      });
+    }
+
+    // 标记为已处理
+    setProcessedContents(prev => [...prev, {
+      id: editingError.errorId,
+      original: error.original,
+      processed: editingError.content,
+      action: 'edited',
+      position: error.position
+    }]);
+
+    setEditingError(null);
+    hideErrorPopup();
+  }, [editingError, errors, documentContent, onContentChange, onAddCorrectionRecord, hideErrorPopup]);
+
   // 新增：替换功能
   const handleReplace = useCallback((errorId: string) => {
     const error = errors.find(e => e.id === errorId);
@@ -200,10 +409,19 @@ export default function QingCiStyleEditor({
       timestamp: new Date()
     };
 
+    // 添加纠错记录
+    const correctionRecord: CorrectionRecord = {
+      id: `correction_${Date.now()}`,
+      original: error.original,
+      corrected: error.suggestion,
+      timestamp: new Date()
+    };
+    onAddCorrectionRecord?.(correctionRecord);
+
     setProcessedContents(prev => [...prev, processedContent]);
     handleContentChange(newContent);
     hideErrorPopup();
-  }, [documentContent, errors, handleContentChange, hideErrorPopup, onUserOperation]);
+  }, [documentContent, errors, handleContentChange, hideErrorPopup, onUserOperation, onAddCorrectionRecord]);
 
   // 新增：编辑功能
   const handleEdit = useCallback((errorId: string) => {
@@ -240,10 +458,20 @@ export default function QingCiStyleEditor({
       timestamp: new Date()
     };
 
+    // 添加纠错记录
+    const correctionRecord: CorrectionRecord = {
+      id: `correction_${Date.now()}`,
+      original: error.original,
+      corrected: editingError.content,
+      timestamp: new Date()
+    };
+    onAddCorrectionRecord?.(correctionRecord);
+
     setProcessedContents(prev => [...prev, processedContent]);
     handleContentChange(newContent);
     hideErrorPopup();
-  }, [editingError, errors, documentContent, handleContentChange, hideErrorPopup, onUserOperation]);
+    setEditingError(null);
+  }, [editingError, errors, documentContent, handleContentChange, hideErrorPopup, onUserOperation, onAddCorrectionRecord]);
 
   // 新增：忽略功能
   const handleIgnore = useCallback((errorId: string) => {
@@ -263,9 +491,18 @@ export default function QingCiStyleEditor({
       timestamp: new Date()
     };
 
+    // 添加纠错记录（忽略操作）
+    const correctionRecord: CorrectionRecord = {
+      id: `correction_${Date.now()}`,
+      original: error.original,
+      corrected: error.original, // 忽略时保持原内容
+      timestamp: new Date()
+    };
+    onAddCorrectionRecord?.(correctionRecord);
+
     setProcessedContents(prev => [...prev, processedContent]);
     hideErrorPopup();
-  }, [errors, hideErrorPopup, onUserOperation]);
+  }, [errors, hideErrorPopup, onUserOperation, onAddCorrectionRecord]);
 
   // 检查内容是否已被处理
   const isContentProcessed = useCallback((errorId: string) => {
@@ -279,6 +516,14 @@ export default function QingCiStyleEditor({
 
   // 渲染带错误标注的文档内容
   const renderDocumentWithAnnotations = () => {
+    console.log('🎯 QingCiStyleEditor renderDocumentWithAnnotations 调用:', {
+      timestamp: new Date().toISOString(),
+      documentContentLength: documentContent?.length || 0,
+      documentContentPreview: documentContent?.substring(0, 100) || 'empty',
+      errorsCount: errors.length,
+      willReturnEmpty: !documentContent
+    });
+    
     if (!documentContent) return '';
     
     // 首先将整个文档转换为HTML格式
@@ -330,7 +575,7 @@ export default function QingCiStyleEditor({
                             'suggestion-underline';
       
       const errorText = convertTextToHTML(error.original);
-      result += `<span class="${underlineClass}" data-error-id="${error.id}" style="cursor: pointer; position: relative;">${errorText}</span>`;
+      result += `<span class="${underlineClass}" data-error-id="${error.id}" style="cursor: pointer; position: relative;" onclick="window.handleErrorClick && window.handleErrorClick('${error.id}', event)">${errorText}</span>`;
       
       lastIndex = error.position.end;
     });
@@ -444,6 +689,11 @@ export default function QingCiStyleEditor({
         .warning-underline:hover,
         .suggestion-underline:hover {
           background-color: rgba(0, 0, 0, 0.05) !important;
+        }
+        .highlight-error {
+          background-color: #fef3c7 !important;
+          box-shadow: 0 0 0 2px #f59e0b !important;
+          transition: all 0.3s ease !important;
         }
       `}</style>
 
@@ -664,7 +914,6 @@ export default function QingCiStyleEditor({
           onKeyUp={handleTextSelection}
           onMouseOver={handleEditorMouseOver}
           onMouseLeave={handleEditorMouseLeave}
-          dangerouslySetInnerHTML={{ __html: renderDocumentWithAnnotations() }}
         />
       </div>
 
@@ -722,7 +971,7 @@ export default function QingCiStyleEditor({
                 </div>
                 <div className="flex space-x-2">
                   <button
-                    onClick={handleSaveEdit}
+                    onClick={confirmEdit}
                     className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
                   >
                     保存
@@ -747,7 +996,7 @@ export default function QingCiStyleEditor({
                 
                 <div className="flex space-x-2">
                   <button
-                    onClick={() => handleReplace(errorPopup.error!.id)}
+                    onClick={() => replaceError(errorPopup.error!.id)}
                     className="flex-1 bg-green-600 text-white px-3 py-2 rounded-md text-sm hover:bg-green-700 transition-colors flex items-center justify-center space-x-1"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -757,17 +1006,17 @@ export default function QingCiStyleEditor({
                   </button>
                   
                   <button
-                    onClick={() => handleEdit(errorPopup.error!.id)}
+                    onClick={() => editError(errorPopup.error!.id)}
                     className="flex-1 bg-blue-600 text-white px-3 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors flex items-center justify-center space-x-1"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                     <span>编辑</span>
                   </button>
                   
                   <button
-                    onClick={() => handleIgnore(errorPopup.error!.id)}
+                    onClick={() => ignoreError(errorPopup.error!.id)}
                     className="flex-1 bg-yellow-600 text-white px-3 py-2 rounded-md text-sm hover:bg-yellow-700 transition-colors flex items-center justify-center space-x-1"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

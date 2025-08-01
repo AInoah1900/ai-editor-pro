@@ -1,124 +1,92 @@
 'use client';
 
 import React, { useState } from 'react';
-import QingCiStyleEditor from '../editor/components/QingCiStyleEditor';
+import RAGEnhancedEditor from '../editor/components/RAGEnhancedEditor';
 
-interface ErrorItem {
-  id: string;
-  type: 'error' | 'warning' | 'suggestion';
-  position: { start: number; end: number };
-  original: string;
-  suggestion: string;
-  reason: string;
-  category: string;
-}
-
+/**
+ * 简化的测试页面
+ * 用于直接测试RAGEnhancedEditor组件是否能正确显示内容
+ */
 export default function TestEditorPage() {
-  const [content, setContent] = useState(`基于超音速数值仿真的某弹体的修正策略研究
+  const [testContent, setTestContent] = useState('');
+  const [forceRerender, setForceRerender] = useState(0);
 
-引言
-
-这是是关于"引言"部分的详细内容。这部分将介绍人工超音速数值仿真技术下多脉冲的某弹体的修正策略研究的应用前景。
-
-根据最新的研究表明，基于超音速数值仿真技术下多脉冲的某弹体的修正策略研究在领域被有了"这的应用前景。
-
-重要发现：基于超音速数值仿真技术下多脉冲的某弹体的修正策略研究的研究表明，这一领域具有巨大的潜力和应用价值。
-
-值得注意的是，这些研究成果对未来发展具有重要意义。
-
-研究中的主要问题包括：
-
-如何提高基于超音速数值仿真技术下多脉冲的某弹体全个章节中多个章节（如引言、研究背景、相关研究与文献综述、研究方法、研究结果、讨论、结论）内容高度重复率
-
-如何降低基于超音速数值仿真技术下多脉冲的某弹体的修正策略研究的成本`);
-
-  const [errors] = useState<ErrorItem[]>([
-    {
-      id: 'error1',
-      type: 'error',
-      position: { start: 26, end: 29 },
-      original: '这是是',
-      suggestion: '这是',
-      reason: '重复词语',
-      category: '语法错误'
-    },
-    {
-      id: 'error2', 
-      type: 'warning',
-      position: { start: 49, end: 51 },
-      original: '人工',
-      suggestion: '基于',
-      reason: '词语使用不当',
-      category: '用词不当'
-    },
-    {
-      id: 'error3',
-      type: 'error',
-      position: { start: 119, end: 125 },
-      original: '在领域被有了',
-      suggestion: '在该领域具有',
-      reason: '语法错误',
-      category: '语法错误'
-    },
-    {
-      id: 'error4',
-      type: 'suggestion',
-      position: { start: 125, end: 127 },
-      original: '"这',
-      suggestion: '广阔',
-      reason: '表达更准确',
-      category: '表达优化'
-    },
-    {
-      id: 'error5',
-      type: 'warning',
-      position: { start: 254, end: 256 },
-      original: '全个',
-      suggestion: '各个',
-      reason: '用词不规范',
-      category: '用词规范'
-    }
-  ]);
+  const testTexts = [
+    '',
+    '这是一个简单的测试文本。',
+    '这是一个更长的测试文本，包含多行内容。\n\n第二段：这里是第二段的内容。\n\n第三段：这里是第三段的内容，用于测试文档显示是否正常。',
+    '这是一个包含特殊字符的测试：\n- 项目1\n- 项目2\n- 项目3\n\n数字：1234567890\n符号：!@#$%^&*()'
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto py-8">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="bg-blue-600 text-white px-6 py-4">
-            <h1 className="text-2xl font-bold">智能编辑加工功能测试</h1>
-            <p className="text-blue-100 mt-2">
-              测试精确到字的下划线标记和弹窗交互功能
-            </p>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        <h1 className="text-2xl font-bold mb-6">RAGEnhancedEditor 测试页面</h1>
+        
+        {/* 测试控制面板 */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+          <h2 className="text-lg font-semibold mb-4">测试控制</h2>
+          <div className="space-y-2">
+            {testTexts.map((text, index) => (
+              <button
+                key={index}
+                onClick={() => setTestContent(text)}
+                className="mr-2 mb-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              >
+                测试文本 {index === 0 ? '(空)' : index}
+              </button>
+            ))}
+            <button
+              onClick={() => setForceRerender(prev => prev + 1)}
+              className="mr-2 mb-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+            >
+              强制重新渲染
+            </button>
           </div>
           
-          <div className="p-6">
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-3">功能说明</h2>
-              <ul className="text-sm text-gray-600 space-y-2">
-                <li>• <span className="text-red-600 font-medium">红色下划线</span>：确定错误</li>
-                <li>• <span className="text-yellow-600 font-medium">黄色下划线</span>：疑似错误</li>
-                <li>• <span className="text-green-600 font-medium">绿色下划线</span>：优化建议</li>
-                <li>• 鼠标悬停在下划线文字上会显示弹窗，提供替换、编辑、忽略功能</li>
-              </ul>
-            </div>
-            
-            <div className="border border-gray-200 rounded-lg overflow-hidden" style={{ height: '600px' }}>
-              <QingCiStyleEditor
-                content={content}
-                errors={errors}
-                onContentChange={setContent}
-              />
-            </div>
+          <div className="mt-4">
+            <textarea
+              value={testContent}
+              onChange={(e) => setTestContent(e.target.value)}
+              placeholder="或者输入自定义测试内容..."
+              className="w-full h-32 p-3 border border-gray-300 rounded-lg"
+            />
           </div>
           
-          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-            <div className="flex items-center justify-between text-sm text-gray-600">
-              <span>当前错误数量: {errors.length}</span>
-              <span>文档字符数: {content.length}</span>
-            </div>
+          <div className="mt-2 text-sm text-gray-600">
+            当前内容长度: {testContent.length} 字符
           </div>
+        </div>
+
+        {/* RAGEnhancedEditor 组件测试 */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <h2 className="text-lg font-semibold mb-4">RAGEnhancedEditor 组件</h2>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+            <RAGEnhancedEditor key={forceRerender} content={testContent} />
+          </div>
+        </div>
+
+        {/* 调试信息 */}
+        <div className="mt-6 bg-gray-100 rounded-lg p-4">
+          <h3 className="text-md font-semibold mb-2">调试信息</h3>
+          <div className="text-sm text-gray-700 space-y-1">
+            <div>传递给组件的 content prop: "{testContent}"</div>
+            <div>content 长度: {testContent.length}</div>
+            <div>content 是否为空: {testContent.length === 0 ? '是' : '否'}</div>
+            <div>content 是否为纯空白: {testContent.trim().length === 0 ? '是' : '否'}</div>
+          </div>
+        </div>
+
+        <div className="mt-4 text-sm text-gray-600">
+          <p>📋 测试说明:</p>
+          <ul className="list-disc list-inside mt-2 space-y-1">
+            <li>点击测试文本按钮来测试不同的内容</li>
+            <li>观察RAGEnhancedEditor组件是否正确显示内容</li>
+            <li>检查浏览器控制台的调试日志</li>
+            <li>如果这个页面能正常显示内容，说明组件本身没问题</li>
+          </ul>
         </div>
       </div>
     </div>
   );
-} 
+}

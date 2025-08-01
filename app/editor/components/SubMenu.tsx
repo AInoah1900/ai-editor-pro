@@ -184,6 +184,14 @@ export default function SubMenu({ activeMenu, activeSubMenu, setActiveSubMenu, s
           return;
         }
 
+        // 添加调试日志
+        console.log('🔍 SubMenu 文件上传成功:', {
+          fileName: file.name,
+          fileSize: file.size,
+          contentLength: content.length,
+          contentPreview: content.substring(0, 100)
+        });
+
         setUploadedDocument(content);
         setActiveSubMenu('rag-editor');
         

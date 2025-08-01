@@ -702,6 +702,13 @@ export default function WorkArea({
   };
   
   const renderContent = () => {
+    // 添加调试日志
+    console.log('🔍 WorkArea renderContent:', {
+      activeSubMenu,
+      uploadedDocumentLength: uploadedDocument?.length || 0,
+      uploadedDocumentPreview: uploadedDocument?.substring(0, 100) || 'empty'
+    });
+    
     switch (activeSubMenu) {
       case 'upload':
         // 如果已经有上传的文档，显示编辑器而不是上传页面

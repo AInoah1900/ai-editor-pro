@@ -16,12 +16,20 @@ export default function UploadArea({ onFileUpload, onSwitchToEditor }: UploadAre
   }>({ type: null, message: '' });
 
   const handleFileUpload = async (file: File) => {
+    console.log('🔍 UploadArea 开始处理文件:', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    });
+    
     setIsProcessing(true);
     setUploadStatus({ type: 'info', message: '正在处理文档...' });
 
     try {
       const fileExtension = file.name.toLowerCase().split('.').pop();
       let content = '';
+      
+      console.log('🔍 文件扩展名:', fileExtension);
 
       switch (fileExtension) {
         case 'docx':
@@ -57,7 +65,14 @@ export default function UploadArea({ onFileUpload, onSwitchToEditor }: UploadAre
           return;
       }
 
+      console.log('🔍 UploadArea 文件解析完成:', {
+        contentLength: content.length,
+        contentTrimmedLength: content.trim().length,
+        contentPreview: content.substring(0, 100)
+      });
+
       if (content.trim().length === 0) {
+        console.log('❌ UploadArea 文档内容为空');
         setUploadStatus({ 
           type: 'error', 
           message: '文档内容为空，请检查文件是否正确' 
@@ -74,11 +89,19 @@ export default function UploadArea({ onFileUpload, onSwitchToEditor }: UploadAre
       
       // 延迟一下让用户看到成功消息
       setTimeout(() => {
+        console.log('🔍 UploadArea 延迟后处理:', {
+          contentLength: content.length,
+          contentPreview: content.substring(0, 50),
+          hasOnFileUpload: !!onFileUpload,
+          hasOnSwitchToEditor: !!onSwitchToEditor
+        });
+        
         onFileUpload(content);
         setIsProcessing(false);
         setUploadStatus({ type: null, message: '' });
         // 通知父组件切换到编辑器视图
         if (onSwitchToEditor) {
+          console.log('🔄 UploadArea 切换到编辑器视图');
           onSwitchToEditor();
         }
       }, 1000);

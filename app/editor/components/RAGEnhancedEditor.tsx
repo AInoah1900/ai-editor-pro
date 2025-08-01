@@ -67,7 +67,19 @@ interface FloatingMenuState {
 }
 
 export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
-  const [documentContent, setDocumentContent] = useState(content);
+  const [documentContent, setDocumentContent] = useState(content || '');
+  
+  // 添加调试日志
+  console.log('🔍 RAGEnhancedEditor 初始化/重新渲染:', {
+    timestamp: new Date().toISOString(),
+    propContent: content?.length || 0,
+    propContentPreview: content?.substring(0, 100) || 'empty',
+    documentContentLength: documentContent?.length || 0,
+    documentContentPreview: documentContent?.substring(0, 100) || 'empty',
+    isContentEmpty: !content || content.trim().length === 0,
+    isDocumentContentEmpty: !documentContent || documentContent.trim().length === 0,
+    contentEqualsDocumentContent: content === documentContent
+  });
   const [errors, setErrors] = useState<ErrorItem[]>([]);
   const [ragResults, setRagResults] = useState<RAGEnhancedResult | null>(null);
   const [correctionRecords, setCorrectionRecords] = useState<CorrectionRecord[]>([]);
@@ -571,11 +583,21 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
 
   // 渲染带有内联纠错的文档内容
   const renderDocumentWithInlineCorrections = () => {
-    console.log('🎯 开始渲染文档，分析状态:', { 
+    console.log('🎯 开始渲染文档，完整状态:', { 
+      timestamp: new Date().toISOString(),
       isAnalyzing, 
-      documentLength: documentContent.length, 
+      documentLength: documentContent?.length || 0, 
       errorsCount: errors.length,
-      hasContent: !!documentContent
+      hasContent: !!documentContent,
+      documentContentPreview: documentContent?.substring(0, 50) || 'empty',
+      renderingCondition: {
+        isAnalyzing,
+        isEmpty: !documentContent || documentContent.trim().length === 0,
+        hasErrors: errors && errors.length > 0
+      },
+      renderingPath: isAnalyzing ? 'ANALYZING' : 
+                    (!documentContent || documentContent.trim().length === 0) ? 'EMPTY' :
+                    (!errors || errors.length === 0) ? 'NO_ERRORS' : 'HAS_ERRORS'
     });
 
     // 分析中状态
@@ -598,9 +620,16 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
           {/* 显示原始文档内容 */}
           <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
             <h4 className="text-gray-700 font-medium mb-4">📄 文档内容预览</h4>
+            
+            {/* 添加调试信息 */}
+            <div className="mb-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
+              调试信息: 内容长度 {documentContent?.length || 0} 字符
+              {documentContent ? ` | 前50字符: "${documentContent.substring(0, 50)}..."` : ' | 内容为空'}
+            </div>
+            
             <div className="prose max-w-none">
-              <div className="whitespace-pre-wrap text-gray-900 leading-relaxed">
-                {documentContent}
+              <div className="whitespace-pre-wrap text-gray-900 leading-relaxed min-h-[100px] border border-dashed border-gray-300 p-4 rounded">
+                {documentContent || '⚠️ 文档内容为空'}
               </div>
             </div>
           </div>
@@ -678,9 +707,16 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
           
           {/* 文档内容 */}
           <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            
+            {/* 添加调试信息 */}
+            <div className="mb-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
+              调试信息: 内容长度 {documentContent?.length || 0} 字符
+              {documentContent ? ` | 前50字符: "${documentContent.substring(0, 50)}..."` : ' | 内容为空'}
+            </div>
+            
             <div className="prose max-w-none">
-              <div className="whitespace-pre-wrap text-gray-900 leading-relaxed text-base" style={{ lineHeight: '1.8' }}>
-                {documentContent}
+              <div className="whitespace-pre-wrap text-gray-900 leading-relaxed text-base min-h-[100px] border border-dashed border-gray-300 p-4 rounded" style={{ lineHeight: '1.8' }}>
+                {documentContent || '⚠️ 文档内容为空'}
               </div>
             </div>
           </div>
@@ -1097,27 +1133,37 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
     }
   }, [analyzeDocumentWithRAG]);
 
+  // 移除可能冲突的useEffect，逻辑合并到下面的useEffect中
+
   // 监听外部content prop变化（初始导入）
   useEffect(() => {
-    console.log('Content prop changed:', { 
+    console.log('📥 Content prop changed:', { 
       contentLength: content?.length || 0, 
       hasContent: !!content,
       currentDocumentContentLength: documentContent?.length || 0,
-      hasInitialAnalysis: analysisState.hasInitialAnalysis
+      hasInitialAnalysis: analysisState.hasInitialAnalysis,
+      contentPreview: content?.substring(0, 50) || 'empty'
     });
     
     if (content && content.trim().length > 0) {
+      // 🔑 关键修复：始终确保documentContent与content prop同步
+      console.log('🔄 强制同步文档内容:', {
+        fromLength: documentContent?.length || 0,
+        toLength: content.length,
+        contentChanged: documentContent !== content
+      });
+      setDocumentContent(content);
+      
       // 检查是否为新内容
       const isNewContent = content !== analysisState.lastAnalyzedContent;
       
       if (isNewContent) {
         console.log('🆕 检测到新文档内容，准备进行初始分析');
         
-      setDocumentContent(content);
-      // 清除之前的错误和分析结果
-      setErrors([]);
-      setRagResults(null);
-      setCorrectionRecords([]);
+        // 清除之前的错误和分析结果
+        setErrors([]);
+        setRagResults(null);
+        setCorrectionRecords([]);
         
         // 重置分析状态
         setAnalysisState({
@@ -1158,7 +1204,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
         isUserOperation: false
       });
     }
-  }, [content, analysisState.lastAnalyzedContent, performAutoAnalysis]);
+  }, [content]); // 简化依赖项，避免循环依赖
 
   // 监听documentContent变化，用于调试
   useEffect(() => {
@@ -1461,6 +1507,25 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                 isUserOperation: true
               }));
             }}
+            onAddCorrectionRecord={(record) => {
+              // 添加纠错记录
+              setCorrectionRecords(prev => [...prev, record]);
+            }}
+            onScrollToError={(errorId) => {
+              // 滚动到错误位置
+              const errorElement = document.querySelector(`[data-error-id="${errorId}"]`);
+              if (errorElement) {
+                errorElement.scrollIntoView({ 
+                  behavior: 'smooth', 
+                  block: 'center' 
+                });
+                // 高亮显示
+                errorElement.classList.add('highlight-error');
+                setTimeout(() => {
+                  errorElement.classList.remove('highlight-error');
+                }, 2000);
+              }
+            }}
           />
         </div>
       </div>
@@ -1604,6 +1669,21 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
                 <div
                   key={error.id}
                   className={`p-2 rounded border cursor-pointer transition-all hover:shadow-md ${getErrorStyle(error.type)}`}
+                  onClick={() => {
+                    // 滚动到错误位置
+                    const errorElement = document.querySelector(`[data-error-id="${error.id}"]`);
+                    if (errorElement) {
+                      errorElement.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'center' 
+                      });
+                      // 高亮显示
+                      errorElement.classList.add('highlight-error');
+                      setTimeout(() => {
+                        errorElement.classList.remove('highlight-error');
+                      }, 2000);
+                    }
+                  }}
                 >
                   <div className="text-xs font-medium uppercase tracking-wide mb-1">
                     {error.category}
