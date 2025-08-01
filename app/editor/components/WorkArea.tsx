@@ -1291,7 +1291,7 @@ export default function WorkArea({
                       >
                         访问知识库
                       </button>
-                    </div>
+                  </div>
                   </div>
                 </div>
               ) : (

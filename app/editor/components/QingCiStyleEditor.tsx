@@ -6,6 +6,7 @@ interface QingCiStyleEditorProps {
   content: string;
   errors?: ErrorItem[];
   onContentChange: (content: string) => void;
+  onUserOperation?: () => void;
   onClearText?: () => void;
   onClearFormat?: () => void;
   onImportDocument?: () => void;
@@ -49,6 +50,7 @@ export default function QingCiStyleEditor({
   content, 
   errors = [], 
   onContentChange,
+  onUserOperation,
   onClearText,
   onClearFormat,
   onImportDocument,
@@ -181,6 +183,9 @@ export default function QingCiStyleEditor({
     const error = errors.find(e => e.id === errorId);
     if (!error) return;
 
+    // 标记用户操作
+    onUserOperation?.();
+
     const newContent = documentContent.substring(0, error.position.start) +
                       error.suggestion +
                       documentContent.substring(error.position.end);
@@ -198,7 +203,7 @@ export default function QingCiStyleEditor({
     setProcessedContents(prev => [...prev, processedContent]);
     handleContentChange(newContent);
     hideErrorPopup();
-  }, [documentContent, errors, handleContentChange, hideErrorPopup]);
+  }, [documentContent, errors, handleContentChange, hideErrorPopup, onUserOperation]);
 
   // 新增：编辑功能
   const handleEdit = useCallback((errorId: string) => {
@@ -218,6 +223,9 @@ export default function QingCiStyleEditor({
     const error = errors.find(e => e.id === editingError.errorId);
     if (!error) return;
 
+    // 标记用户操作
+    onUserOperation?.();
+
     const newContent = documentContent.substring(0, error.position.start) +
                       editingError.content +
                       documentContent.substring(error.position.end);
@@ -235,12 +243,15 @@ export default function QingCiStyleEditor({
     setProcessedContents(prev => [...prev, processedContent]);
     handleContentChange(newContent);
     hideErrorPopup();
-  }, [editingError, errors, documentContent, handleContentChange, hideErrorPopup]);
+  }, [editingError, errors, documentContent, handleContentChange, hideErrorPopup, onUserOperation]);
 
   // 新增：忽略功能
   const handleIgnore = useCallback((errorId: string) => {
     const error = errors.find(e => e.id === errorId);
     if (!error) return;
+
+    // 标记用户操作
+    onUserOperation?.();
 
     // 记录处理后的内容
     const processedContent: ProcessedContent = {
@@ -254,7 +265,7 @@ export default function QingCiStyleEditor({
 
     setProcessedContents(prev => [...prev, processedContent]);
     hideErrorPopup();
-  }, [errors, hideErrorPopup]);
+  }, [errors, hideErrorPopup, onUserOperation]);
 
   // 检查内容是否已被处理
   const isContentProcessed = useCallback((errorId: string) => {
@@ -301,7 +312,7 @@ export default function QingCiStyleEditor({
       
       return convertTextToHTML(result);
     }
-
+    
     // 按位置排序错误
     const sortedErrors = [...activeErrors].sort((a, b) => a.position.start - b.position.start);
     
@@ -394,16 +405,16 @@ export default function QingCiStyleEditor({
     return (
       <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 z-10 grid grid-cols-6 gap-1">
         {colors.map((color) => (
-          <button
-            key={color}
-            className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
-            style={{ backgroundColor: color }}
+            <button
+              key={color}
+              className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+              style={{ backgroundColor: color }}
             onClick={() => {
               onSelect(color);
               onClose();
             }}
-          />
-        ))}
+            />
+          ))}
       </div>
     );
   };

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import QingCiStyleEditor from './QingCiStyleEditor';
 
 interface DocumentEditorProps {
@@ -98,12 +98,28 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
     charactersProcessed: 0
   });
 
+  // 新增状态：AI分析状态管理
+  const [analysisState, setAnalysisState] = useState({
+    hasInitialAnalysis: false,  // 是否已完成初始分析
+    lastAnalyzedContent: '',    // 上次分析的内容
+    isUserOperation: false      // 当前是否为用户操作（替换/编辑/忽略）
+  });
+
   const editorRef = useRef<HTMLDivElement>(null);
 
   // 底部功能栏处理函数
   const handleClearText = () => {
     if (confirm('确定要清空所有文档内容吗？')) {
       setDocumentContent('');
+      // 清空时重置分析状态
+      setAnalysisState({
+        hasInitialAnalysis: false,
+        lastAnalyzedContent: '',
+        isUserOperation: false
+      });
+      setErrors([]);
+      setRagResults(null);
+      setCorrectionRecords([]);
     }
   };
 
@@ -121,8 +137,17 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
       if (file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          const content = e.target?.result as string;
-          setDocumentContent(content);
+          const newContent = e.target?.result as string;
+          setDocumentContent(newContent);
+          // 导入新文档时重置分析状态，标记需要初始分析
+          setAnalysisState({
+            hasInitialAnalysis: false,
+            lastAnalyzedContent: '',
+            isUserOperation: false
+          });
+          setErrors([]);
+          setRagResults(null);
+          setCorrectionRecords([]);
         };
         reader.readAsText(file);
       }
@@ -169,97 +194,82 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
 
       console.log('API响应状态:', response.status, response.statusText);
 
-      if (response.ok) {
-        // 检查响应内容类型
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          console.error('API返回了非JSON响应:', contentType);
-          const textResponse = await response.text();
-          console.error('响应内容:', textResponse.substring(0, 200));
-          throw new Error('API返回了非JSON响应');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API请求失败:', response.status, errorText);
+        throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
         }
 
         const result = await response.json();
-        console.log('分析结果:', result);
+      console.log('API响应数据:', result);
         
-        // RAG增强版API始终返回domain_info
-        if (result.domain_info) {
-          setRagResults(result);
-          
-          // 显示多知识库使用情况
-          if (result.knowledge_sources) {
-            console.log('🔍 知识库使用统计:', {
-              专属知识库: result.knowledge_sources.private_count,
-              共享知识库: result.knowledge_sources.shared_count,
-              总计: result.knowledge_sources.total_count
-            });
-            
-            // 详细调试信息
-            console.log('📊 详细knowledge_sources数据:', result.knowledge_sources);
-            console.log('🎯 private_count值:', result.knowledge_sources.private_count, typeof result.knowledge_sources.private_count);
-            console.log('🎯 shared_count值:', result.knowledge_sources.shared_count, typeof result.knowledge_sources.shared_count);
-            console.log('🎯 total_count值:', result.knowledge_sources.total_count, typeof result.knowledge_sources.total_count);
-          } else {
-            console.warn('⚠️ knowledge_sources数据缺失!');
-          }
-          
-          if (result.document_sources) {
-            console.log('文档来源统计:', {
-              专属文档: result.document_sources.private_documents?.length || 0,
-              共享文档: result.document_sources.shared_documents?.length || 0
-            });
-          }
-        }
+      // API直接返回ragResult对象，不需要包装格式
+      if (result && result.errors) {
+        const { errors: analysisErrors, ...ragData } = result;
         
-        if (result.errors && Array.isArray(result.errors)) {
-          const validatedErrors = result.errors.map((error: {
-            id?: string;
-            type?: string;
-            position?: { start: number; end: number };
-            original?: string;
-            suggestion?: string;
-            reason?: string;
-            category?: string;
-          }, index: number) => ({
-            id: `${error.id || 'error'}_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`,
-            type: (error.type as 'error' | 'warning' | 'suggestion') || 'warning',
-            position: error.position || { start: index * 10, end: index * 10 + 5 },
-            original: error.original || '未知错误',
-            suggestion: error.suggestion || '请检查此处',
-            reason: error.reason || '需要进一步检查',
-            category: error.category || '其他问题'
+        // 转换错误格式以匹配组件接口
+        const formattedErrors: ErrorItem[] = (analysisErrors || []).map((error: any, index: number) => ({
+          id: error.id || `error_${index}`,
+          type: error.type || 'error',
+          position: error.position || { start: 0, end: 0 },
+          original: error.original || '',
+          suggestion: error.suggestion || '',
+          reason: error.reason || '',
+          category: error.category || 'unknown'
           }));
           
-          setErrors(validatedErrors);
-        } else {
-          console.warn('分析结果格式异常:', result);
-          setErrors([]);
-        }
-      } else {
-        // 获取错误详情
-        let errorText = '';
-        try {
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const errorResult = await response.json();
-            errorText = errorResult.error || response.statusText;
-          } else {
-            errorText = await response.text();
-          }
-        } catch (e) {
-          errorText = response.statusText;
-        }
+        setErrors(formattedErrors);
+        setRagResults(ragData);
         
-        console.error('分析失败:', response.status, errorText);
-        throw new Error(`${response.status} "${errorText}"`);
+        // 更新分析状态
+        setAnalysisState(prev => ({
+          ...prev,
+          hasInitialAnalysis: true,
+          lastAnalyzedContent: documentContent
+        }));
+
+        console.log(`✅ 分析完成，发现 ${formattedErrors.length} 个问题`);
+        } else {
+        console.warn('API返回格式异常:', result);
+          setErrors([]);
+        setRagResults(null);
       }
     } catch (error) {
-      console.error('分析调用失败:', error);
-      throw error; // 重新抛出错误，让调用者处理
+      console.error('文档分析失败:', error);
+      setErrors([]);
+      setRagResults(null);
     } finally {
       setIsAnalyzing(false);
     }
   }, [documentContent]);
+
+  // 处理内容变化（来自编辑器的修改）
+  const handleEditorContentChange = useCallback((newContent: string) => {
+    console.log('📝 编辑器内容变化:', { 
+      isUserOperation: analysisState.isUserOperation,
+      contentLength: newContent.length 
+    });
+
+    setDocumentContent(newContent);
+    
+    // 更新文档统计
+    setDocumentStats(prev => ({
+      ...prev,
+      currentLength: newContent.length,
+      charactersProcessed: prev.originalLength > 0 ? newContent.length - prev.originalLength : 0
+    }));
+
+    // 如果是用户操作（替换/编辑/忽略），不触发自动分析
+    if (analysisState.isUserOperation) {
+      console.log('🔄 用户操作引起的内容变化，跳过自动分析');
+      // 重置用户操作标记
+      setAnalysisState(prev => ({
+        ...prev,
+        isUserOperation: false
+      }));
+      return;
+    }
+  }, [analysisState.isUserOperation]);
 
   // 获取错误类型的样式
   const getErrorStyle = (type: string) => {
@@ -1087,44 +1097,78 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
     }
   }, [analyzeDocumentWithRAG]);
 
+  // 监听外部content prop变化（初始导入）
   useEffect(() => {
     console.log('Content prop changed:', { 
       contentLength: content?.length || 0, 
       hasContent: !!content,
-      currentDocumentContentLength: documentContent?.length || 0 
+      currentDocumentContentLength: documentContent?.length || 0,
+      hasInitialAnalysis: analysisState.hasInitialAnalysis
     });
     
     if (content && content.trim().length > 0) {
+      // 检查是否为新内容
+      const isNewContent = content !== analysisState.lastAnalyzedContent;
+      
+      if (isNewContent) {
+        console.log('🆕 检测到新文档内容，准备进行初始分析');
+        
       setDocumentContent(content);
       // 清除之前的错误和分析结果
       setErrors([]);
       setRagResults(null);
       setCorrectionRecords([]);
+        
+        // 重置分析状态
+        setAnalysisState({
+          hasInitialAnalysis: false,
+          lastAnalyzedContent: '',
+          isUserOperation: false
+        });
+
+        // 更新原始文档统计
+        setDocumentStats(prev => ({
+          ...prev,
+          originalLength: content.length,
+          currentLength: content.length,
+          charactersProcessed: 0
+        }));
       
       // 延迟1秒后自动分析，避免频繁调用
       const timer = setTimeout(() => {
+          console.log('🚀 开始自动分析新文档');
         performAutoAnalysis();
       }, 1000);
       
       return () => {
         clearTimeout(timer);
       };
+      } else {
+        console.log('📄 内容未变化，跳过重复分析');
+      }
     } else {
       // 如果content为空，清空所有状态
       setDocumentContent('');
       setErrors([]);
       setRagResults(null);
       setCorrectionRecords([]);
+      setAnalysisState({
+        hasInitialAnalysis: false,
+        lastAnalyzedContent: '',
+        isUserOperation: false
+      });
     }
-  }, [content, performAutoAnalysis]);
+  }, [content, analysisState.lastAnalyzedContent, performAutoAnalysis]);
 
   // 监听documentContent变化，用于调试
   useEffect(() => {
     console.log('DocumentContent state updated:', {
       length: documentContent?.length || 0,
-      preview: documentContent?.substring(0, 100) || 'empty'
+      preview: documentContent?.substring(0, 100) || 'empty',
+      hasInitialAnalysis: analysisState.hasInitialAnalysis,
+      isUserOperation: analysisState.isUserOperation
     });
-  }, [documentContent]);
+  }, [documentContent, analysisState]);
 
   // 更新文档统计
   useEffect(() => {
@@ -1168,6 +1212,13 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
             <button
               onClick={async () => {
                 try {
+                  console.log('🔍 用户手动触发AI分析');
+                  // 重置分析状态，允许重新分析
+                  setAnalysisState(prev => ({
+                    ...prev,
+                    hasInitialAnalysis: false,
+                    isUserOperation: false
+                  }));
                   await analyzeDocumentWithRAG();
                 } catch (error) {
                   console.error('手动分析失败:', error);
@@ -1402,7 +1453,14 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
           <QingCiStyleEditor
             content={documentContent}
             errors={errors}
-            onContentChange={setDocumentContent}
+            onContentChange={handleEditorContentChange}
+            onUserOperation={() => {
+              // 标记即将进行用户操作
+              setAnalysisState(prev => ({
+                ...prev,
+                isUserOperation: true
+              }));
+            }}
           />
         </div>
       </div>
