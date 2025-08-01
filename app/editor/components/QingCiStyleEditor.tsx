@@ -132,9 +132,50 @@ export default function QingCiStyleEditor({
     }
   }, [content]);
   
-  // 单独的useEffect处理内容渲染，确保documentContent已更新
+  // 添加标记来跟踪内容来源
+  const [lastRenderedContent, setLastRenderedContent] = useState('');
+  const [shouldRender, setShouldRender] = useState(false);
+  
+  // 监听content prop变化（来自父组件的新内容）
   useEffect(() => {
-    if (editorRef.current && documentContent) {
+    if (content && content !== lastRenderedContent) {
+      console.log('🔄 检测到新内容从父组件传入:', {
+        timestamp: new Date().toISOString(),
+        contentLength: content.length,
+        contentPreview: content.substring(0, 100)
+      });
+      setShouldRender(true);
+    }
+  }, [content, lastRenderedContent]);
+  
+  // 监听errors变化，确保错误标注能及时更新
+  useEffect(() => {
+    if (errors.length > 0 && documentContent) {
+      console.log('🔄 检测到错误数据更新，触发重新渲染:', {
+        timestamp: new Date().toISOString(),
+        errorsCount: errors.length,
+        documentContentLength: documentContent.length
+      });
+      setShouldRender(true);
+    }
+  }, [errors, documentContent]);
+  
+  // 强制初始渲染 - 确保在有内容和错误时进行渲染
+  useEffect(() => {
+    if (documentContent && !shouldRender && !lastRenderedContent) {
+      console.log('🔄 强制初始渲染:', {
+        timestamp: new Date().toISOString(),
+        documentContentLength: documentContent.length,
+        errorsCount: errors.length,
+        reason: '初始加载完成'
+      });
+      setShouldRender(true);
+    }
+  }, [documentContent, errors, shouldRender, lastRenderedContent]);
+  
+  // 只在需要时渲染内容（初始加载或错误操作后）
+  useEffect(() => {
+    if (editorRef.current && documentContent && shouldRender) {
       console.log('🎯 QingCiStyleEditor 渲染内容:', {
         timestamp: new Date().toISOString(),
         documentContentLength: documentContent.length,
@@ -147,29 +188,52 @@ export default function QingCiStyleEditor({
         renderedContentLength: renderedContent.length,
         renderedContentPreview: renderedContent.substring(0, 100)
       });
+      
       editorRef.current.innerHTML = renderedContent;
+      setLastRenderedContent(documentContent);
+      setShouldRender(false);
     }
-  }, [documentContent, errors]);
+  }, [documentContent, errors, shouldRender]);
 
-  // 处理内容变化
+  // 处理内容变化 - 简化版本，只传递给父组件，不触发本地重新渲染
   const handleContentChange = useCallback((newContent: string) => {
-    console.log('🔍 QingCiStyleEditor handleContentChange:', {
+    console.log('🔍 QingCiStyleEditor handleContentChange (用户编辑):', {
       timestamp: new Date().toISOString(),
       newContentLength: newContent.length,
       newContentPreview: newContent.substring(0, 100)
     });
     
-    // 保留HTML格式，不要移除标签
-    // 只在必要时提取纯文本（比如传递给父组件时）
+    // 提取纯文本用于传递给父组件
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = newContent;
     const plainText = tempDiv.textContent || tempDiv.innerText || '';
     
-    // 更新本地状态时保留HTML格式
-    setDocumentContent(plainText);
+    // 将HTML转换为带格式的纯文本，保持换行和段落结构
+    const formattedText = newContent
+      .replace(/<br\s*\/?>/gi, '\n')  // <br> 转换为换行
+      .replace(/<\/p>/gi, '\n\n')     // </p> 转换为双换行
+      .replace(/<p[^>]*>/gi, '')      // 移除 <p> 开始标签
+      .replace(/<div[^>]*>/gi, '')    // 移除 <div> 开始标签
+      .replace(/<\/div>/gi, '\n')     // </div> 转换为换行
+      .replace(/<[^>]*>/g, '')        // 移除其他HTML标签
+      .replace(/&nbsp;/g, ' ')        // 转换HTML实体
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'")
+      .replace(/\n\s*\n\s*\n/g, '\n\n') // 多个连续换行合并为双换行
+      .trim();
     
-    // 传递给父组件时使用纯文本
-    onContentChange(plainText);
+    console.log('🔍 格式转换结果 (仅传递给父组件):', {
+      originalLength: newContent.length,
+      formattedLength: formattedText.length,
+      formattedPreview: formattedText.substring(0, 100)
+    });
+    
+    // 只传递给父组件，不更新本地的documentContent状态
+    // 这样就不会触发重新渲染
+    onContentChange(formattedText);
     
     // 标记用户操作
     if (onUserOperation) {
@@ -217,7 +281,11 @@ export default function QingCiStyleEditor({
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#x27;')
-      .replace(/\n/g, '<br>');
+      .replace(/\n\n/g, '</p><p>')  // 双换行转换为段落
+      .replace(/\n/g, '<br>')       // 单换行转换为<br>
+      .replace(/^(.+)$/s, '<p>$1</p>') // 整体包装在段落中
+      .replace(/<p><\/p>/g, '')     // 移除空段落
+      .replace(/<p><br><\/p>/g, '<p></p>'); // 清理只有<br>的段落
   };
 
   // 新增：显示错误弹窗
@@ -282,6 +350,9 @@ export default function QingCiStyleEditor({
     const newContent = documentContent.replace(error.original, error.suggestion);
     setDocumentContent(newContent);
     onContentChange(newContent);
+    
+    // 触发重新渲染
+    setShouldRender(true);
 
     // 添加纠错记录
     if (onAddCorrectionRecord) {
@@ -326,6 +397,9 @@ export default function QingCiStyleEditor({
 
     console.log('🚫 忽略错误:', { errorId });
 
+    // 触发重新渲染以更新错误标注
+    setShouldRender(true);
+
     // 添加纠错记录
     if (onAddCorrectionRecord) {
       onAddCorrectionRecord({
@@ -362,6 +436,9 @@ export default function QingCiStyleEditor({
     const newContent = documentContent.replace(error.original, editingError.content);
     setDocumentContent(newContent);
     onContentChange(newContent);
+    
+    // 触发重新渲染
+    setShouldRender(true);
 
     // 添加纠错记录
     if (onAddCorrectionRecord) {
@@ -521,7 +598,14 @@ export default function QingCiStyleEditor({
       documentContentLength: documentContent?.length || 0,
       documentContentPreview: documentContent?.substring(0, 100) || 'empty',
       errorsCount: errors.length,
-      willReturnEmpty: !documentContent
+      willReturnEmpty: !documentContent,
+      errorsDetails: errors.map(e => ({
+        id: e.id,
+        type: e.type,
+        original: e.original,
+        position: e.position,
+        hasValidPosition: e.position && e.position.start !== undefined && e.position.end !== undefined
+      }))
     });
     
     if (!documentContent) return '';
@@ -530,11 +614,23 @@ export default function QingCiStyleEditor({
     let htmlContent = convertTextToHTML(documentContent);
     
     if (errors.length === 0) {
+      console.log('🎯 没有错误，返回基本HTML内容');
       return htmlContent;
     }
 
     // 过滤掉已处理的错误
     const activeErrors = errors.filter(error => !isContentProcessed(error.id));
+    
+    console.log('🎯 错误过滤结果:', {
+      totalErrors: errors.length,
+      activeErrorsCount: activeErrors.length,
+      processedContentsCount: processedContents.length,
+      activeErrorsDetails: activeErrors.map(e => ({
+        id: e.id,
+        original: e.original,
+        position: e.position
+      }))
+    });
     
     if (activeErrors.length === 0) {
       // 如果所有错误都已处理，添加处理后的标记
@@ -561,28 +657,73 @@ export default function QingCiStyleEditor({
     // 按位置排序错误
     const sortedErrors = [...activeErrors].sort((a, b) => a.position.start - b.position.start);
     
-    let result = '';
+    console.log('🎯 开始处理错误标注:', {
+      sortedErrorsCount: sortedErrors.length,
+      documentContentLength: documentContent.length
+    });
+    
+    let result = '<p>';
     let lastIndex = 0;
 
-    sortedErrors.forEach((error) => {
-      // 添加错误前的正常文本
+    sortedErrors.forEach((error, index) => {
+      console.log(`🎯 处理错误 ${index + 1}/${sortedErrors.length}:`, {
+        errorId: error.id,
+        type: error.type,
+        original: error.original,
+        position: error.position,
+        beforeTextLength: error.position.start - lastIndex,
+        beforeText: documentContent.slice(lastIndex, error.position.start).substring(0, 50)
+      });
+      
+      // 验证位置是否有效
+      if (error.position.start < 0 || error.position.end > documentContent.length || error.position.start >= error.position.end) {
+        console.warn('🚫 错误位置无效，跳过:', error);
+        return;
+      }
+      
+      // 添加错误前的正常文本，直接处理换行符
       const beforeText = documentContent.slice(lastIndex, error.position.start);
-      result += convertTextToHTML(beforeText);
+      result += beforeText.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
       
       // 添加带标注的错误文本 - 使用精确的下划线样式
       const underlineClass = error.type === 'error' ? 'error-underline' : 
                             error.type === 'warning' ? 'warning-underline' : 
                             'suggestion-underline';
       
-      const errorText = convertTextToHTML(error.original);
-      result += `<span class="${underlineClass}" data-error-id="${error.id}" style="cursor: pointer; position: relative;" onclick="window.handleErrorClick && window.handleErrorClick('${error.id}', event)">${errorText}</span>`;
+      // 直接使用原始文本，但处理换行符，避免p标签嵌套问题
+      const errorText = error.original.replace(/\n/g, '<br>');
       
+      // 使用内联样式确保下划线显示
+      const inlineStyle = error.type === 'error' 
+        ? 'background: linear-gradient(transparent 60%, #ef4444 60%, #ef4444 100%); background-size: 100% 1.2em; background-repeat: repeat-x; background-position: 0 1em; border-bottom: 2px solid #ef4444; padding: 2px 0; cursor: pointer; text-decoration: none;'
+        : error.type === 'warning'
+        ? 'background: linear-gradient(transparent 60%, #f59e0b 60%, #f59e0b 100%); background-size: 100% 1.2em; background-repeat: repeat-x; background-position: 0 1em; border-bottom: 2px solid #f59e0b; padding: 2px 0; cursor: pointer; text-decoration: none;'
+        : 'background: linear-gradient(transparent 60%, #10b981 60%, #10b981 100%); background-size: 100% 1.2em; background-repeat: repeat-x; background-position: 0 1em; border-bottom: 2px solid #10b981; padding: 2px 0; cursor: pointer; text-decoration: none;';
+      
+      const errorSpan = `<span class="${underlineClass}" data-error-id="${error.id}" style="${inlineStyle}" onclick="window.handleErrorClick && window.handleErrorClick('${error.id}', event)">${errorText}</span>`;
+      
+      console.log(`🎯 生成错误标注HTML:`, {
+        underlineClass,
+        errorText,
+        inlineStyle: inlineStyle.substring(0, 100),
+        errorSpan: errorSpan.substring(0, 100)
+      });
+      
+      result += errorSpan;
       lastIndex = error.position.end;
     });
     
-    // 添加最后的正常文本
+    // 添加最后的正常文本，直接处理换行符
     const afterText = documentContent.slice(lastIndex);
-    result += convertTextToHTML(afterText);
+    result += afterText.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+    result += '</p>';
+    
+    console.log('🎯 错误标注处理完成:', {
+      finalResultLength: result.length,
+      finalResultPreview: result.substring(0, 200),
+      containsErrorSpans: result.includes('error-underline') || result.includes('warning-underline') || result.includes('suggestion-underline'),
+      spanCount: (result.match(/<span[^>]*data-error-id/g) || []).length
+    });
     
     return result;
   };
