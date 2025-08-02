@@ -1583,6 +1583,11 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
             onAddCorrectionRecord={(record) => {
               // 添加纠错记录
               setCorrectionRecords(prev => [...prev, record]);
+              
+              // 删除对应的错误
+              setErrors(prev => prev.filter(e => e.id !== record.id));
+              
+              console.log(`✅ 错误已处理并删除: ${record.id}, 原始内容: "${record.original}" -> 修正内容: "${record.corrected}"`);
             }}
             onScrollToError={(errorId) => {
               // 滚动到错误位置
