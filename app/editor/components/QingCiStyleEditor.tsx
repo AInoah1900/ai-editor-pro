@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
 interface QingCiStyleEditorProps {
   content: string;
@@ -74,15 +74,23 @@ export default function QingCiStyleEditor({
   const [lastRenderedContent, setLastRenderedContent] = useState('');
   const [shouldRender, setShouldRender] = useState(false);
   
-  // 添加调试日志
-  console.log('🔍 QingCiStyleEditor 初始化/重新渲染:', {
-    timestamp: new Date().toISOString(),
-    propContent: content?.length || 0,
-    propContentPreview: content?.substring(0, 100) || 'empty',
-    documentContentLength: documentContent?.length || 0,
-    documentContentPreview: documentContent?.substring(0, 100) || 'empty',
-    errorsCount: errors.length
-  });
+  // 优化调试日志 - 只在开发环境且内容真正变化时输出
+  const shouldLogRender = useMemo(() => {
+    const isDev = process.env.NODE_ENV === 'development';
+    const contentChanged = content !== documentContent;
+    const errorsChanged = errors.length !== 0;
+    return isDev && (contentChanged || errorsChanged);
+  }, [content, documentContent, errors.length]);
+
+  if (shouldLogRender) {
+    console.log('🔍 QingCiStyleEditor 内容/错误变化重新渲染:', {
+      timestamp: new Date().toISOString(),
+      propContent: content?.length || 0,
+      documentContentLength: documentContent?.length || 0,
+      errorsCount: errors.length,
+      contentChanged: content !== documentContent
+    });
+  }
   const [formatState, setFormatState] = useState({
     bold: false,
     italic: false,
@@ -235,7 +243,7 @@ export default function QingCiStyleEditor({
         return;
       }
       
-      const renderedContent = renderDocumentWithAnnotations();
+      // 直接使用useMemo缓存的结果
       console.log('🎯 设置编辑器innerHTML:', {
         renderedContentLength: renderedContent.length,
         renderedContentPreview: renderedContent.substring(0, 100)
@@ -659,7 +667,8 @@ export default function QingCiStyleEditor({
   }, [processedContents]);
 
   // 渲染带错误标注的文档内容
-  const renderDocumentWithAnnotations = () => {
+  // 使用useMemo缓存渲染结果，避免重复计算
+  const renderedContent = useMemo(() => {
     console.log('🎯 QingCiStyleEditor renderDocumentWithAnnotations 调用:', {
       timestamp: new Date().toISOString(),
       documentContentLength: documentContent?.length || 0,
@@ -780,7 +789,7 @@ export default function QingCiStyleEditor({
     });
     
     return result;
-  };
+  }, [documentContent, errors, processedContents]); // 添加依赖数组
 
   // 处理编辑器鼠标悬停事件
   const handleEditorMouseOver = useCallback((event: React.MouseEvent) => {

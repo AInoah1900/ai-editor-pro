@@ -1,6 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+
+// 防抖函数实现
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
 import QingCiStyleEditor from './QingCiStyleEditor';
 
 interface DocumentEditorProps {
@@ -69,17 +81,29 @@ interface FloatingMenuState {
 export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
   const [documentContent, setDocumentContent] = useState(content || '');
   
-  // 添加调试日志
-  console.log('🔍 RAGEnhancedEditor 初始化/重新渲染:', {
-    timestamp: new Date().toISOString(),
-    propContent: content?.length || 0,
-    propContentPreview: content?.substring(0, 100) || 'empty',
-    documentContentLength: documentContent?.length || 0,
-    documentContentPreview: documentContent?.substring(0, 100) || 'empty',
-    isContentEmpty: !content || content.trim().length === 0,
-    isDocumentContentEmpty: !documentContent || documentContent.trim().length === 0,
-    contentEqualsDocumentContent: content === documentContent
-  });
+  // 添加防抖机制优化状态更新
+  const debouncedSetDocumentContent = useCallback(
+    debounce((newContent: string) => {
+      setDocumentContent(newContent);
+    }, 100),
+    []
+  );
+  
+  // 优化调试日志 - 只在开发环境且内容真正变化时输出
+  const shouldLogRender = useMemo(() => {
+    const isDev = process.env.NODE_ENV === 'development';
+    const contentChanged = content !== documentContent;
+    return isDev && contentChanged;
+  }, [content, documentContent]);
+
+  if (shouldLogRender) {
+    console.log('🔍 RAGEnhancedEditor 内容变化重新渲染:', {
+      timestamp: new Date().toISOString(),
+      propContent: content?.length || 0,
+      documentContentLength: documentContent?.length || 0,
+      contentChanged: content !== documentContent
+    });
+  }
   const [errors, setErrors] = useState<ErrorItem[]>([]);
   const [ragResults, setRagResults] = useState<RAGEnhancedResult | null>(null);
   const [correctionRecords, setCorrectionRecords] = useState<CorrectionRecord[]>([]);
