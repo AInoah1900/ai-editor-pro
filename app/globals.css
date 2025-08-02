@@ -178,3 +178,47 @@ html {
     line-height: 3rem;
   }
 }
+
+/* 编辑器性能优化 - 防止hover效果导致重新渲染 */
+.editor-container,
+.editor-container * {
+  /* 禁用可能导致重新渲染的transform效果 */
+  will-change: auto !important;
+}
+
+/* 错误标注hover效果优化 - 移除可能导致重新渲染的属性 */
+.error-underline:hover,
+.warning-underline:hover,
+.suggestion-underline:hover {
+  /* 只保留基本的透明度变化，避免布局重排 */
+  opacity: 0.8 !important;
+  /* 移除transform和复杂动画 */
+  transform: none !important;
+  transition: opacity 0.1s ease !important;
+  /* 保持原有的下划线效果 */
+  background-size: 100% 1.2em !important;
+  background-position: 0 1em !important;
+}
+
+/* contenteditable元素优化 */
+[contenteditable="true"] {
+  /* 禁用可能导致重新渲染的属性 */
+  outline: none !important;
+  /* 优化输入性能 */
+  -webkit-user-modify: read-write-plaintext-only;
+}
+
+/* 按钮hover效果优化 - 只在非编辑器区域应用 */
+.editor-container button:hover {
+  /* 简化hover效果，避免重新渲染 */
+  opacity: 0.9 !important;
+  transform: none !important;
+  transition: opacity 0.1s ease !important;
+}
+
+/* 卡片hover效果优化 - 在编辑器中禁用 */
+.editor-container .card-hover:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  transition: none !important;
+}

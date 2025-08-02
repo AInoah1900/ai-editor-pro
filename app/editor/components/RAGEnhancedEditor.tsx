@@ -327,29 +327,33 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
   const handleEditorContentChange = useCallback((newContent: string) => {
     console.log('📝 编辑器内容变化:', { 
       isUserOperation: analysisState.isUserOperation,
-      contentLength: newContent.length 
+      contentLength: newContent.length,
+      currentDocumentLength: documentContent.length
     });
 
-    setDocumentContent(newContent);
-    
-    // 更新文档统计
-    setDocumentStats(prev => ({
-      ...prev,
-      currentLength: newContent.length,
-      charactersProcessed: prev.originalLength > 0 ? newContent.length - prev.originalLength : 0
-    }));
-
-    // 如果是用户操作（替换/编辑/忽略），不触发自动分析
-    if (analysisState.isUserOperation) {
-      console.log('🔄 用户操作引起的内容变化，跳过自动分析');
-      // 重置用户操作标记
-      setAnalysisState(prev => ({
+    // 防止重复内容 - 只有当内容真正改变时才更新
+    if (newContent !== documentContent) {
+      setDocumentContent(newContent);
+      
+      // 更新文档统计
+      setDocumentStats(prev => ({
         ...prev,
-        isUserOperation: false
+        currentLength: newContent.length,
+        charactersProcessed: prev.originalLength > 0 ? newContent.length - prev.originalLength : 0
       }));
-      return;
+
+      // 如果是用户操作（替换/编辑/忽略），不触发自动分析
+      if (analysisState.isUserOperation) {
+        console.log('🔄 用户操作引起的内容变化，跳过自动分析');
+        // 重置用户操作标记
+        setAnalysisState(prev => ({
+          ...prev,
+          isUserOperation: false
+        }));
+        return;
+      }
     }
-  }, [analysisState.isUserOperation]);
+  }, [analysisState.isUserOperation, documentContent]);
 
   // 获取错误类型的样式
   const getErrorStyle = (type: string) => {

@@ -70,6 +70,10 @@ export default function QingCiStyleEditor({
 }: QingCiStyleEditorProps) {
   const [documentContent, setDocumentContent] = useState(content);
   
+  // 添加标记来跟踪内容来源
+  const [lastRenderedContent, setLastRenderedContent] = useState('');
+  const [shouldRender, setShouldRender] = useState(false);
+  
   // 添加调试日志
   console.log('🔍 QingCiStyleEditor 初始化/重新渲染:', {
     timestamp: new Date().toISOString(),
@@ -116,41 +120,93 @@ export default function QingCiStyleEditor({
   const colorPickerRef = useRef<HTMLDivElement>(null);
   const bgColorPickerRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
+  const inputTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 同步内容变化
+  // 光标位置管理辅助函数
+  const getTextOffset = (range: Range): number => {
+    let offset = 0;
+    const walker = document.createTreeWalker(
+      editorRef.current!,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+      if (node === range.startContainer) {
+        offset += range.startOffset;
+        break;
+      }
+      offset += node.textContent?.length || 0;
+    }
+    
+    return offset;
+  };
+
+  const restoreCursorPosition = (offset: number): void => {
+    if (!editorRef.current) return;
+    
+    let currentOffset = 0;
+    const walker = document.createTreeWalker(
+      editorRef.current,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+      const nodeLength = node.textContent?.length || 0;
+      if (currentOffset + nodeLength >= offset) {
+        const range = document.createRange();
+        range.setStart(node, offset - currentOffset);
+        range.setEnd(node, offset - currentOffset);
+        
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        
+        console.log('🔍 恢复光标位置:', { offset, restoredOffset: offset - currentOffset });
+        break;
+      }
+      currentOffset += nodeLength;
+    }
+  };
+
+  // 清理定时器
+  useEffect(() => {
+    return () => {
+      if (inputTimeoutRef.current) {
+        clearTimeout(inputTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // 同步内容变化 - 简化版本，避免无限循环
   useEffect(() => {
     console.log('🔍 QingCiStyleEditor useEffect 触发:', {
       timestamp: new Date().toISOString(),
       propContent: content?.length || 0,
       documentContent: documentContent?.length || 0,
       contentChanged: content !== documentContent,
-      hasEditorRef: !!editorRef.current
+      hasEditorRef: !!editorRef.current,
+      lastRenderedContent: lastRenderedContent?.length || 0,
+      shouldRender
     });
     
+    // 当内容改变或首次加载时更新
     if (content !== documentContent) {
       setDocumentContent(content);
-    }
-  }, [content]);
-  
-  // 添加标记来跟踪内容来源
-  const [lastRenderedContent, setLastRenderedContent] = useState('');
-  const [shouldRender, setShouldRender] = useState(false);
-  
-  // 监听content prop变化（来自父组件的新内容）
-  useEffect(() => {
-    if (content && content !== lastRenderedContent) {
-      console.log('🔄 检测到新内容从父组件传入:', {
-        timestamp: new Date().toISOString(),
-        contentLength: content.length,
-        contentPreview: content.substring(0, 100)
-      });
+      setShouldRender(true);
+    } else if (content && !lastRenderedContent && !shouldRender) {
+      // 首次加载时，即使内容相同也需要渲染
+      console.log('🔄 首次加载，强制渲染');
       setShouldRender(true);
     }
-  }, [content, lastRenderedContent]);
+  }, [content, documentContent, lastRenderedContent, shouldRender]);
   
-  // 监听errors变化，确保错误标注能及时更新
+  // 监听错误变化，触发重新渲染
   useEffect(() => {
-    if (errors.length > 0 && documentContent) {
+    if (errors.length > 0 && documentContent && lastRenderedContent) {
       console.log('🔄 检测到错误数据更新，触发重新渲染:', {
         timestamp: new Date().toISOString(),
         errorsCount: errors.length,
@@ -158,22 +214,9 @@ export default function QingCiStyleEditor({
       });
       setShouldRender(true);
     }
-  }, [errors, documentContent]);
+  }, [errors, documentContent, lastRenderedContent]);
   
-  // 强制初始渲染 - 确保在有内容和错误时进行渲染
-  useEffect(() => {
-    if (documentContent && !shouldRender && !lastRenderedContent) {
-      console.log('🔄 强制初始渲染:', {
-        timestamp: new Date().toISOString(),
-        documentContentLength: documentContent.length,
-        errorsCount: errors.length,
-        reason: '初始加载完成'
-      });
-      setShouldRender(true);
-    }
-  }, [documentContent, errors, shouldRender, lastRenderedContent]);
-  
-  // 只在需要时渲染内容（初始加载或错误操作后）
+  // 简化为单个渲染useEffect
   useEffect(() => {
     if (editorRef.current && documentContent && shouldRender) {
       console.log('🎯 QingCiStyleEditor 渲染内容:', {
@@ -182,6 +225,15 @@ export default function QingCiStyleEditor({
         documentContentPreview: documentContent.substring(0, 100),
         errorsCount: errors.length
       });
+      
+      // 检查是否正在用户输入
+      const isUserTyping = editorRef.current === document.activeElement;
+      
+      if (isUserTyping) {
+        console.log('🎯 用户正在输入，跳过重新渲染');
+        setShouldRender(false);
+        return;
+      }
       
       const renderedContent = renderDocumentWithAnnotations();
       console.log('🎯 设置编辑器innerHTML:', {
@@ -195,7 +247,7 @@ export default function QingCiStyleEditor({
     }
   }, [documentContent, errors, shouldRender]);
 
-  // 处理内容变化 - 简化版本，只传递给父组件，不触发本地重新渲染
+  // 处理内容变化 - 防止重复和无限循环
   const handleContentChange = useCallback((newContent: string) => {
     console.log('🔍 QingCiStyleEditor handleContentChange (用户编辑):', {
       timestamp: new Date().toISOString(),
@@ -231,15 +283,30 @@ export default function QingCiStyleEditor({
       formattedPreview: formattedText.substring(0, 100)
     });
     
-    // 只传递给父组件，不更新本地的documentContent状态
-    // 这样就不会触发重新渲染
-    onContentChange(formattedText);
-    
-    // 标记用户操作
-    if (onUserOperation) {
-      onUserOperation();
+    // 防止重复内容 - 只有当内容真正改变时才传递给父组件
+    if (formattedText !== documentContent) {
+      // 保存当前光标位置
+      const selection = window.getSelection();
+      const range = selection?.getRangeAt(0);
+      const cursorOffset = range ? getTextOffset(range) : 0;
+      
+      console.log('🔍 保存光标位置:', { cursorOffset });
+      
+      onContentChange(formattedText);
+      
+      // 标记用户操作
+      if (onUserOperation) {
+        onUserOperation();
+      }
+      
+      // 延迟恢复光标位置
+      setTimeout(() => {
+        if (editorRef.current && cursorOffset > 0) {
+          restoreCursorPosition(cursorOffset);
+        }
+      }, 10);
     }
-  }, [onContentChange, onUserOperation]);
+  }, [onContentChange, onUserOperation, documentContent]);
 
   // 处理文本选择
   const handleTextSelection = () => {
@@ -1032,7 +1099,13 @@ export default function QingCiStyleEditor({
           }}
           onInput={(e) => {
             const content = e.currentTarget.innerHTML || '';
-            handleContentChange(content);
+            // 使用防抖处理用户输入
+            if (inputTimeoutRef.current) {
+              clearTimeout(inputTimeoutRef.current);
+            }
+            inputTimeoutRef.current = setTimeout(() => {
+              handleContentChange(content);
+            }, 100);
           }}
           onMouseUp={handleTextSelection}
           onKeyUp={handleTextSelection}
