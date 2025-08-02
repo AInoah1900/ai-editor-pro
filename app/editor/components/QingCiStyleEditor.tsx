@@ -633,25 +633,12 @@ export default function QingCiStyleEditor({
     });
     
     if (activeErrors.length === 0) {
-      // 如果所有错误都已处理，添加处理后的标记
-      let result = documentContent;
-      const sortedProcessed = [...processedContents].sort((a, b) => b.position.start - a.position.start);
+      // 如果所有错误都已处理，显示处理后的干净内容
+      console.log('🎯 所有错误已处理完成，显示干净内容');
       
-      sortedProcessed.forEach((processed) => {
-        const beforeText = result.substring(0, processed.position.start);
-        const afterText = result.substring(processed.position.end);
-        
-        // 根据处理动作选择颜色
-        const colorClass = processed.action === 'replaced' ? 'text-red-600' :
-                          processed.action === 'edited' ? 'text-yellow-600' :
-                          'text-green-600';
-        
-        const processedText = `<span class="${colorClass} font-medium" title="已${processed.action === 'replaced' ? '替换' : processed.action === 'edited' ? '编辑' : '忽略'}: ${processed.original} → ${processed.processed}">${processed.processed}</span>`;
-        
-        result = beforeText + processedText + afterText;
-      });
-      
-      return convertTextToHTML(result);
+      // 直接返回处理后的内容，不添加额外的标记
+      // 因为用户已经完成了所有修改，应该显示最终结果
+      return convertTextToHTML(documentContent);
     }
     
     // 按位置排序错误
@@ -826,11 +813,7 @@ export default function QingCiStyleEditor({
           border-bottom: 2px solid #10b981 !important;
           text-decoration: none !important;
         }
-        .error-underline:hover,
-        .warning-underline:hover,
-        .suggestion-underline:hover {
-          background-color: rgba(0, 0, 0, 0.05) !important;
-        }
+
         .highlight-error {
           background-color: #fef3c7 !important;
           box-shadow: 0 0 0 2px #f59e0b !important;

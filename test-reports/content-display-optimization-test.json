@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-08-02T04:42:02.816Z",
+  "testName": "内容展示优化测试",
+  "result": "PASS",
+  "details": {
+    "dataCleaning": "测试数据清理功能",
+    "htmlTagRemoval": "测试HTML标签清理",
+    "promptRemoval": "测试提示信息清理",
+    "positionValidation": "测试位置验证"
+  }
+}

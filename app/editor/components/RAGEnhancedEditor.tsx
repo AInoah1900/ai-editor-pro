@@ -119,6 +119,80 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
 
   const editorRef = useRef<HTMLDivElement>(null);
 
+  // 新增：数据清理和验证函数
+  const cleanAndValidateErrorData = (rawErrors: any[]): ErrorItem[] => {
+    console.log('🧹 开始清理和验证错误数据...');
+    
+    return rawErrors.map((error, index) => {
+      // 清理original字段 - 移除HTML标签和多余信息
+      let cleanOriginal = error.original || '';
+      if (typeof cleanOriginal === 'string') {
+        // 移除HTML标签
+        cleanOriginal = cleanOriginal.replace(/<[^>]*>/g, '');
+        // 移除"已替换:"等提示信息
+        cleanOriginal = cleanOriginal.replace(/已替换:\s*[^→]*→\s*/g, '');
+        // 移除多余的空格和换行
+        cleanOriginal = cleanOriginal.trim();
+      }
+
+      // 清理suggestion字段
+      let cleanSuggestion = error.suggestion || '';
+      if (typeof cleanSuggestion === 'string') {
+        cleanSuggestion = cleanSuggestion.replace(/<[^>]*>/g, '').trim();
+      }
+
+      // 清理reason字段
+      let cleanReason = error.reason || '';
+      if (typeof cleanReason === 'string') {
+        cleanReason = cleanReason.replace(/<[^>]*>/g, '').trim();
+      }
+
+      // 验证position字段
+      let validPosition = { start: 0, end: 0 };
+      if (error.position && typeof error.position.start === 'number' && typeof error.position.end === 'number') {
+        validPosition = {
+          start: Math.max(0, error.position.start),
+          end: Math.min(documentContent.length, error.position.end)
+        };
+      } else {
+        // 如果没有有效位置，尝试从文档中查找
+        if (cleanOriginal && documentContent) {
+          const foundIndex = documentContent.indexOf(cleanOriginal);
+          if (foundIndex !== -1) {
+            validPosition = {
+              start: foundIndex,
+              end: foundIndex + cleanOriginal.length
+            };
+          }
+        }
+      }
+
+      // 验证type字段
+      let validType: 'error' | 'warning' | 'suggestion' = 'warning';
+      if (error.type && ['error', 'warning', 'suggestion'].includes(error.type)) {
+        validType = error.type;
+      }
+
+      const cleanedError: ErrorItem = {
+        id: error.id || `cleaned_error_${Date.now()}_${index}`,
+        type: validType,
+        position: validPosition,
+        original: cleanOriginal,
+        suggestion: cleanSuggestion,
+        reason: cleanReason,
+        category: error.category || '其他问题'
+      };
+
+      console.log(`✅ 清理错误 ${index + 1}:`, {
+        original: cleanOriginal,
+        position: validPosition,
+        type: validType
+      });
+
+      return cleanedError;
+    });
+  };
+
   // 底部功能栏处理函数
   const handleClearText = () => {
     if (confirm('确定要清空所有文档内容吗？')) {
@@ -219,18 +293,12 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
       if (result && result.errors) {
         const { errors: analysisErrors, ...ragData } = result;
         
-        // 转换错误格式以匹配组件接口
-        const formattedErrors: ErrorItem[] = (analysisErrors || []).map((error: any, index: number) => ({
-          id: error.id || `error_${index}`,
-          type: error.type || 'error',
-          position: error.position || { start: 0, end: 0 },
-          original: error.original || '',
-          suggestion: error.suggestion || '',
-          reason: error.reason || '',
-          category: error.category || 'unknown'
-          }));
+        // 使用数据清理函数处理错误数据
+        console.log('🔍 原始错误数据:', analysisErrors);
+        const cleanedErrors = cleanAndValidateErrorData(analysisErrors || []);
+        console.log('✅ 清理后的错误数据:', cleanedErrors);
           
-        setErrors(formattedErrors);
+        setErrors(cleanedErrors);
         setRagResults(ragData);
         
         // 更新分析状态
@@ -240,7 +308,7 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
           lastAnalyzedContent: documentContent
         }));
 
-        console.log(`✅ 分析完成，发现 ${formattedErrors.length} 个问题`);
+        console.log(`✅ 分析完成，发现 ${cleanedErrors.length} 个问题`);
         } else {
         console.warn('API返回格式异常:', result);
           setErrors([]);
@@ -842,10 +910,9 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
         }
       }
 
-      // 添加错误标注
+      // 添加错误标注 - 优化版本，确保只显示原始错误内容
       parts.push(
         <span key={error.id} className="relative inline-block">
-          {/* 错误文本标注 - 优化版本 */}
           <span
             className={`relative inline-block px-2 py-1 rounded-md cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-105 ${
               error.type === 'error' 
@@ -861,8 +928,9 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
             title={`${error.category}: ${error.reason} (点击查看菜单)`}
           >
             <span className="relative">
+              {/* 确保只显示原始错误内容，不包含任何HTML标签或提示信息 */}
               {error.original}
-              {/* 错误类型指示器 - 更明显的设计 */}
+              {/* 错误类型指示器 */}
               <span className={`absolute -top-2 -right-2 w-3 h-3 rounded-full border-2 border-white ${
                 error.type === 'error' ? 'bg-red-500' : 
                 error.type === 'warning' ? 'bg-yellow-500' : 'bg-green-500'
@@ -876,15 +944,16 @@ export default function RAGEnhancedEditor({ content }: DocumentEditorProps) {
       console.log(`  更新lastIndex: ${lastIndex}`);
     });
 
-    // 添加替换后的内容（蓝色标注）
+    // 添加替换后的内容（蓝色标注）- 优化版本
     replacedContents.forEach((replaced, index) => {
       parts.push(
         <span key={`replaced_${replaced.id}`} className="relative inline-block">
           <span
             className="inline-block px-2 py-1 rounded-md bg-blue-100 text-blue-800 border-b-2 border-blue-500 cursor-help"
-            title={`已替换: "${replaced.original}" -> "${replaced.replaced}"`}
+            title={`已替换: "${replaced.original}" → "${replaced.replaced}"`}
           >
             <span className="relative">
+              {/* 确保只显示替换后的内容，不包含任何HTML标签 */}
               {replaced.replaced}
               {/* 替换成功指示器 */}
               <span className="absolute -top-2 -right-2 w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm">
